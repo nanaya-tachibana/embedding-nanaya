@@ -17,19 +17,25 @@ class CorpusBuilder:
                      num_per_vertex,
                      alpha,
                      output='./random_walk',
+                     use_meta_path=0,
                      n_jobs=1):
-        mapping = dict(zip(self._g.nodes(), range(len(self.node_names))))
-        _adj = self._g.adjacency_list()
-        adj_list = [_adj[mapping[v]] for v in range(len(self.node_names))]
+        adj_list = [list(self._g.adj[i].keys())
+                    for i in range(len(self.node_names))]
+        node_types = [self._g.node[i].get('type', 0)
+                      for i in range(len(self.node_names))]
+        n_types = len(set(node_types))
+        node_names = [name.encode('UTF-8') for name in self.node_names]
         random_walk.build_random_walk_corpus(
             adj_list,
-            [name.encode('UTF-8') for name in self.node_names],
+            node_types,
+            n_types,
+            node_names,
             output.encode('UTF-8'),
             path_length, num_per_vertex,
-            alpha, n_jobs)
+            alpha, use_meta_path, n_jobs)
 
 
 if __name__ == '__main__':
-    g = nx.read_edgelist('example_graphs/p2p-Gnutella08.edgelist')
+    g = nx.read_edgelist('example.txt')
     builder = CorpusBuilder(g)
     builder.build_corpus(20, 10, 0, 'data/random_walk', n_jobs=4)

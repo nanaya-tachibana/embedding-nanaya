@@ -13,17 +13,21 @@ char output_file[MAX_STRING];
 typedef struct Vertex {
   long *neighbors;
   long degree;
+  int type;
   char *name;
 } Vertex;
 
 
 typedef struct StaticGraph {
   Vertex *vertices;
+  int n_types;
   long vcount;
+  long max_degree;
 } StaticGraph;
 
 
-void GraphInit(StaticGraph *g, long vcount, char **names);
+void GraphInit(StaticGraph *g, long vcount, char **names,
+	       int *types, int n_types);
 void GraphDestroy(StaticGraph *g);
 void SetNeighbors(StaticGraph *g, long vertex, long *neighbors, long degree);
 void GraphPrint(StaticGraph *g);
@@ -31,12 +35,14 @@ int RandomPath(StaticGraph *g,
 	       char **path,
 	       long start,
 	       int max_length,
-	       float alpha);
+	       float alpha,
+	       int use_meta_path);
 void GenerateRandomWalkThread(void *_g, long i, int tid);
 void GenerateRandomWalk(StaticGraph *g,
 			int path_length,
 			int num_per_vertex,
 			float alpha,
+			int use_meta_path,
 			int n_jobs);
 void SetOutputFile(char *filename);
 long RandomInteger(long low, long high);

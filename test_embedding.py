@@ -168,8 +168,8 @@ if __name__ == '__main__':
                      embedding_size=200,
                      window=8,
                      negative=25,
-                     learning_rate=0.025,
-                     linear_learning_rate_decay=0,
+                     learning_rate=0.05,
+                     linear_learning_rate_decay=1,
                      sample=1e-4,
                      iters=15,
                      n_jobs=4)

@@ -29,6 +29,11 @@ def build_random_walk_corpus(list adjlist,
     for i in range(vcount):
         names[i] = vertex_names[i]
     types = <int *>malloc(vcount * cython.sizeof(int))
+    if types is NULL:
+        raise MemoryError()
+    for i in range(vcount):
+        types[i] = vertex_types[i]
+
     GraphInit(&g, vcount, names, types, n_types)
 
     for i in range(vcount):

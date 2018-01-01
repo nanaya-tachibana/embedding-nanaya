@@ -113,39 +113,42 @@ int RandomPath(StaticGraph *g, char **path, long start,
 
   length = 0;
   strcpy(path[length++], g->vertices[start].name);
-  
+
   current = g->vertices[start];
-  next_type = -1;
   sign = 1;
   if (use_meta_path) {
-    typed_neighbors = (long *)malloc(sizeof(long) * current.degree);
+    typed_neighbors = (long *)malloc(sizeof(long) * g->max_degree);
     if (typed_neighbors == NULL) {
       perror("(ERROR) Memory allocation failed\n");
       exit(-1);
     }
+    if (current.type == g->n_types - 1)
+      sign = -1;
+    else
+      sign = 1;
   }
 
   while (length < max_length) {
     if (RandomFloat(0, 1) >= alpha) {  // include alpha = 0
       if (current.degree == 0)
-	return length;
+	break;
       else {
 	if (use_meta_path) { // meta path
-	  if (current.type == g->n_types - 1 || current.type == 0)
-	    sign = -sign;
-	  next_type = current.type + sign;
-    
+          next_type = current.type + sign;
+
 	  count = 0;
 	  for (i = 0; i < current.degree; i++) {
 	    neighbor = current.neighbors[i];
 	    if (next_type == g->vertices[neighbor].type)
 	      typed_neighbors[count++] = neighbor;
-	  }
-	  if (count == 0) 
+          }
+	  if (count == 0)
 	    break;
 	  i = RandomInteger(0, count);
 	  neighbor = typed_neighbors[i];
 	  strcpy(path[length++], g->vertices[neighbor].name);
+          if (next_type == 0 || next_type == g->n_types - 1)
+            sign = -sign;
 	}
 	else {
 	  i = RandomInteger(0, current.degree);
@@ -214,6 +217,7 @@ void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
   global.length = path_length;
   global.alpha = alpha;
   global.meta = use_meta_path;
+  printf("max degree: %ld\n", g->max_degree);
 
   files = (FILE **)malloc(n_jobs * sizeof(FILE *));
   if (files == NULL) {

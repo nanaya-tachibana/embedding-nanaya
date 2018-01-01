@@ -171,13 +171,21 @@ void SetOutputFile(char *filename) {
 }
 
 
-void GenerateRandomWalkThread(void *_g, long index, int tid) {
+void GenerateRandomWalkThread(void *_g, long idx, int tid) {
   char **path;
   int actual_length;
   int i;
+  clock_t now;
 
   global_t *g = (global_t *)_g;
-  index = index % g->graph->vcount;  // start point index
+  idx = idx % g->graph->vcount;  // start point index
+
+  now = clock();
+  printf("%cProgress: %.2f%%  Words/thread/sec: %.2fk  ", 13,
+         actual_node_count / (float)(total_node_count) * 100,
+         actual_node_count / ((float)(now - start + 1) / (float)CLOCKS_PER_SEC * 1000));
+  fflush(stdout);
+  actual_node_count++;
 
   path = (char **)malloc(g->length * sizeof(char *));
   if (path == NULL) {
@@ -192,7 +200,7 @@ void GenerateRandomWalkThread(void *_g, long index, int tid) {
     }
   }
 
-  actual_length = RandomPath(g->graph, path, index, g->length, g->alpha, g->meta);
+  actual_length = RandomPath(g->graph, path, idx, g->length, g->alpha, g->meta);
   for (i = 0; i < actual_length; i++) {
     if (i != 0)
       fprintf(g->files[tid], " ");
@@ -234,8 +242,10 @@ void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
     }
   }
   global.files = files;
-    
-  kt_for(n_jobs, &GenerateRandomWalkThread, &global, g->vcount * num_per_vertex);
+
+  total_node_count = g->vcount * num_per_vertex;
+  start = clock();
+  kt_for(n_jobs, &GenerateRandomWalkThread, &global, total_node_count);
 
   for (i = 0; i < n_jobs; i++)
     fclose(files[i]);

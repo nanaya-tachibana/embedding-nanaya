@@ -1,11 +1,112 @@
 from array import array
 import random
-import collections
 import numpy as np
 import word2vec
 
-import time
-from tqdm import *
+from tqdm import tqdm
+
+
+class Vocab:
+
+    def __init__(self):
+        self._vocab = []
+        self.word_indices = dict()
+
+    def add_word(self, word):
+        """
+        Add a word if word is not in the vocab else increase word frequency.
+        Parameters
+        ----------
+        word: str
+              The word to be added.
+
+        Returns
+        ---------
+        idx: int
+             The indice of the word.
+        """
+        if word not in self.word_indices:
+            idx = len(self._vocab)
+            self.word_indices[word] = idx
+            self._vocab.append({'word': word, 'freq': 1})
+        else:
+            idx = self.word_indices[word]
+            self._vocab[idx]['freq'] += 1
+        return idx
+
+    def get_frequency(self, word):
+        """
+        Return the frequency of a word in the vocab.
+        Parameters
+        ----------
+        word: str
+              The searching word.
+
+        Returns
+        ---------
+        freq: int
+             The frequency of the word in the vocab.
+        """
+        idx = self.word_indices.get(word, -1)
+        return self._vocab[idx]['freq'] if idx != -1 else 0
+
+    def get_indice(self, word):
+        """
+        Return the indice of a word in the vocab.
+        Parameters
+        ----------
+        word: str
+              The searching word.
+
+        Returns
+        ---------
+        idx: int
+             The indice of the word in the vocab.
+             Return -1 if the word is not in the vocab.
+        """
+        return self.word_indices.get(word, -1)
+
+    def filtering(self, min_count):
+        """
+        Remove the words with frequency less than min_count.
+        Parameters
+        ----------
+        min_count: int
+                   The minimum count.
+
+        Returns
+        ---------
+        count: int
+               The sum of frequency of all the removed words.
+        """
+        count = 0
+        vocab = []
+        for d in self:
+            if d['freq'] < min_count:
+                count += d['freq']
+            else:
+                vocab.append(d)
+        self._vocab = vocab
+        self.word_indices = {d['word']: i for i, d in enumerate(self)}
+        return count
+
+    def __len__(self):
+        return len(self._vocab)
+
+    def __contains__(self, w):
+        return w in self.word_indices
+
+    def __iter__(self):
+        """
+        Sequentially iterator through the vocab.
+        """
+        return iter(self._vocab)
+
+    def __getitem__(self, w):
+        return self.get_frequency(w)
+
+    def __repr__(self):
+        return repr(self._vocab)
 
 
 class Word2vec:
@@ -16,6 +117,7 @@ class Word2vec:
                  window=10,
                  negative=5,
                  learning_rate=0.025,
+                 linear_learning_rate_decay=1,
                  sample=1e-5,
                  iters=1,
                  alpha=0.75,
@@ -34,15 +136,14 @@ class Word2vec:
         self.z = 0
         self.alpha = alpha
 
-        self.max_vocab_size = max_vocab_size
-        self.word_freqs = collections.defaultdict(int)
-        self.word_indices = dict()
+        self.vocab = Vocab()
         self.syn0 = None
         self.syn1neg = None
 
         self.window = window
         self.negative = negative
         self.learning_rate = learning_rate
+        self.linear_learning_rate_decay = linear_learning_rate_decay
         self.sample = sample
         self.iters = iters
         self.debug_mode = debug_mode
@@ -55,12 +156,11 @@ class Word2vec:
     def save(self, filename):
         pass
 
-    def save_embed(self, filename):
+    def save_word2vec_binary(self, filename):
         with open(filename, 'wb') as f:
-            f.write(b'%d %d\n' % (len(self.word_indices), self.embedding_size))
-            words, _ = zip(*sorted(self.word_indices.items(),
-                                   key=lambda x: x[1]))
-            for i, word in enumerate(words):
+            f.write(b'%d %d\n' % (len(self.vocab), self.embedding_size))
+            for i, v in enumerate(self.vocab):
+                word = v['word']
                 f.write(word.encode('UTF-8'))
                 f.write(b' ')
                 a = array('f', self.syn0[i, :])
@@ -68,52 +168,38 @@ class Word2vec:
                 f.write(b'\n')
 
     def train(self, filename):
-        train_words = self._load_train_file(filename)
         if not self.trained:
-            self.word_freqs['</s>'] += 0
-            self.word_indices['</s>'] = 0
-        # discard infrequent words
-        count = 1
-        for word in self.word_freqs:
-            freq = self.word_freqs[word]
-            if freq < self.min_count:
-                train_words -= self.word_freqs[word]
-            else:
-                self.word_indices[word] = count
-                count += 1
+            train_words = self._load_train_file(filename)
+        else:
+            train_words = self._load_train_file(filename, unigram_online=True)
+        self.vocab.add_word('</s>')
 
-        self.unigram_table = np.array(
-            [self.word_indices[w]
-             for w in self.unigram_table if w in self.word_indices],
-            dtype=np.int64)
-        self.unigram_table_size = self.unigram_table.shape[0]
-
+        vocab_size = len(self.vocab)
         if self.syn1neg is not None:
             temp = self.syn0
-            self.syn1neg = np.zeros(self.embedding_size*len(self.word_indices),
+            self.syn1neg = np.zeros(self.embedding_size * vocab_size,
                                     dtype=np.float32)
             self.syn1neg[:self.embedding_size*temp.shape[0]] = temp.flatten()
             del temp
         else:
-            self.syn1neg = np.zeros(self.embedding_size*len(self.word_indices),
+            self.syn1neg = np.zeros(self.embedding_size * vocab_size,
                                     dtype=np.float32)
         if self.syn0 is not None:
             temp = self.syn0
             self.syn0 = np.array(
                 np.random.uniform(
-                    -0.5, 0.5, self.embedding_size * len(self.word_indices)),
+                    -0.5, 0.5, self.embedding_size * vocab_size),
                 dtype=np.float32)
             self.syn0[:self.embedding_size*temp.shape[0]] = temp.flatten()
             del temp
         else:
             self.syn0 = np.array(
                 np.random.uniform(
-                    -0.5, 0.5, self.embedding_size * len(self.word_indices)),
+                    -0.5, 0.5, self.embedding_size * vocab_size),
                 dtype=np.float32)
 
-        words, _ = zip(*sorted(self.word_indices.items(), key=lambda x: x[1]))
-        word_freqs = np.array([self.word_freqs[w] for w in words],
-                              dtype=np.int64)
+        words, word_freqs = zip(*[(v['word'], v['freq']) for v in self.vocab])
+        word_freqs = np.array(word_freqs, dtype=np.int64)
 
         print("Vocab size: ", len(words))
         print("Words in train file: ", train_words)
@@ -129,23 +215,50 @@ class Word2vec:
                            self.syn0, self.syn1neg, self.cbow,
                            train_words, filename.encode('UTF-8'),
                            self.embedding_size, self.negative, self.window,
-                           self.learning_rate, self.sample, self.iters,
+                           self.learning_rate, self.linear_learning_rate_decay,
+                           self.sample, self.iters,
                            self.debug_mode, self.n_jobs)
         self.syn0 = self.syn0.reshape((-1, self.embedding_size))
         self.trained = True
 
-    def _load_train_file(self, filename):
-        count = 0
+    def _load_train_file(self, filename, unigram_online=False):
+        word_count = 0
         with open(filename, 'r') as f:
             for line in tqdm(f):
                 for word in line.strip('\n ').split(' '):
-                    self._add_word(word)
-                    count += 1
-        return count
+                    self.vocab.add_word(word)
+                    word_count += 1
+                    if unigram_online:
+                        self._build_unigram_table_online(word)
 
-    def _add_word(self, word):
-        self.word_freqs[word] += 1
-        freq = self.word_freqs[word]
+        word_count -= self.vocab.filtering(self.min_count)
+        if not unigram_online:
+            self._build_unigram_table()
+        else:
+            self.unigram_table = np.array(
+                [self.vocab.get_indice[w]
+                 for w in self.unigram_table if w in self.vocab],
+                dtype=np.int64)
+        return word_count
+
+    def _build_unigram_table(self):
+        self.unigram_table = np.zeros(self.max_unigram_table_size,
+                                      dtype=np.int64)
+        self.unigram_table_size = self.max_unigram_table_size
+        words_pow = sum(v['freq'] ** self.alpha for v in self.vocab)
+        idx = 0
+        cumulated = 0
+        for v in self.vocab:
+            word, freq = v['word'], v['freq']
+            cumulated += freq ** self.alpha / words_pow
+            while (idx < self.unigram_table_size
+                   and idx / self.max_unigram_table_size <= cumulated):
+                self.unigram_table[idx] = self.vocab.get_indice(word)
+                idx += 1
+        self.z = words_pow
+
+    def _build_unigram_table_online(self, word):
+        freq = self.vocab[word]
         F = freq ** self.alpha - (freq - 1) ** self.alpha
         self.z += F
 
@@ -158,26 +271,3 @@ class Word2vec:
             for _ in range(exp):
                 index = random.randint(0, self.max_unigram_table_size - 1)
                 self.unigram_table[index] = word
-
-
-if __name__ == '__main__':
-    # model = Word2vec(cbow=1,
-    #                  embedding_size=200,
-    #                  window=8,
-    #                  negative=25,
-    #                  learning_rate=0.025,
-    #                  sample=1e-4,
-    #                  iters=15,
-    #                  n_jobs=8)
-    # model.train('text8')
-    # model.save_embed('embed')
-    model = Word2vec(cbow=1,
-                     embedding_size=200,
-                     window=8,
-                     negative=5,
-                     learning_rate=0.05,
-                     sample=1e-5,
-                     iters=3,
-                     n_jobs=4)
-    model.train('random_walks.csv')
-    model.save_embed('wsd')

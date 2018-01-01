@@ -1,7 +1,10 @@
+import os
 from array import array
 import random
 import numpy as np
 import word2vec
+
+from corpus import RandomWalkCorpus
 
 from tqdm import tqdm
 
@@ -122,7 +125,6 @@ class Word2vec:
                  iters=1,
                  alpha=0.75,
                  debug_mode=2,
-                 n_jobs=1,
                  min_count=5,
                  max_unigram_table_size=int(1e8),
                  max_vocab_size=int(1e8)):
@@ -147,7 +149,6 @@ class Word2vec:
         self.sample = sample
         self.iters = iters
         self.debug_mode = debug_mode
-        self.n_jobs = n_jobs
         self.min_count = min_count
 
     def load(self, filename):
@@ -167,7 +168,8 @@ class Word2vec:
                 a.tofile(f)
                 f.write(b'\n')
 
-    def train(self, filename):
+    def train(self, filename, n_jobs=os.cpu_count()):
+        print('Load training data.')
         if not self.trained:
             train_words = self._load_train_file(filename)
         else:
@@ -201,15 +203,9 @@ class Word2vec:
         words, word_freqs = zip(*[(v['word'], v['freq']) for v in self.vocab])
         word_freqs = np.array(word_freqs, dtype=np.int64)
 
-        print("Vocab size: ", len(words))
-        print("Words in train file: ", train_words)
-        print(word_freqs.shape,
-              self.unigram_table.shape, self.unigram_table_size,
-              self.syn0.shape, self.syn1neg.shape, self.cbow,
-              train_words, filename.encode('UTF-8'),
-              self.embedding_size, self.negative, self.window,
-              self.learning_rate, self.sample, self.iters,
-              self.debug_mode, self.n_jobs)
+        print('Vocab size: ', len(words))
+        print('Words in train file: ', train_words)
+        print('Train embedding model.')
         word2vec.train_w2v([w.encode('UTF-8') for w in words], word_freqs,
                            self.unigram_table, self.unigram_table_size,
                            self.syn0, self.syn1neg, self.cbow,
@@ -217,7 +213,7 @@ class Word2vec:
                            self.embedding_size, self.negative, self.window,
                            self.learning_rate, self.linear_learning_rate_decay,
                            self.sample, self.iters,
-                           self.debug_mode, self.n_jobs)
+                           self.debug_mode, n_jobs)
         self.syn0 = self.syn0.reshape((-1, self.embedding_size))
         self.trained = True
 
@@ -271,3 +267,24 @@ class Word2vec:
             for _ in range(exp):
                 index = random.randint(0, self.max_unigram_table_size - 1)
                 self.unigram_table[index] = word
+
+
+class Node2vec(Word2vec):
+
+    def train(self, g,
+              path_length=80,
+              num_per_vertex=10,
+              alpha=0,
+              output_dir='.',
+              use_meta_path=0,
+              n_jobs=os.cpu_count()):
+        builder = RandomWalkCorpus(g)
+        corpus_file = builder.build_corpus(
+            path_length=path_length,
+            num_per_vertex=num_per_vertex,
+            alpha=alpha,
+            output_dir=output_dir,
+            use_meta_path=use_meta_path,
+            n_jobs=n_jobs)
+        print('')
+        super().train(corpus_file, n_jobs=n_jobs)

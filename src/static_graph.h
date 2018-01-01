@@ -8,6 +8,9 @@
 #define MAX_STRING 100
 
 char output_file[MAX_STRING];
+clock_t start;
+long actual_node_count;
+long total_node_count;
 
 
 typedef struct Vertex {
@@ -37,7 +40,7 @@ int RandomPath(StaticGraph *g,
 	       int max_length,
 	       float alpha,
 	       int use_meta_path);
-void GenerateRandomWalkThread(void *_g, long i, int tid);
+void GenerateRandomWalkThread(void *_g, long idx, int tid);
 void GenerateRandomWalk(StaticGraph *g,
 			int path_length,
 			int num_per_vertex,

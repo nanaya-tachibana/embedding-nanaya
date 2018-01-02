@@ -49,6 +49,10 @@ void GraphDestroy(StaticGraph *g) {
       free(g->vertices[i].neighbors);
     if (g->vertices[i].name != NULL)
       free(g->vertices[i].name);
+    if (g->vertices[i].type_begin_idx != NULL)
+      free(g->vertices[i].type_begin_idx);
+    if (g->vertices[i].type_end_idx != NULL)
+      free(g->vertices[i].type_end_idx);
   }
   if (g->vertices != NULL)
     free(g->vertices);
@@ -94,13 +98,13 @@ void SetNeighbors(StaticGraph *g, long vertex, long *neighbors, long degree) {
 	
 	if (is_first) {
 	  is_first = 0;
-	  v->type_begin_idx[type] = degree - 1;
+	  v->type_begin_idx[type] = v->degree - 1;
 	}
       }
     }
-    v->type_end_idx[type] = degree;
+    v->type_end_idx[type] = v->degree;
     if (is_first)
-      v->type_begin_idx[type] = degree;
+      v->type_begin_idx[type] = v->degree;
   }
 }
 
@@ -141,7 +145,7 @@ int RandomPath(StaticGraph *g, char **path, long start,
   current = g->vertices[start];
   sign = 1;
   if (use_meta_path && current.type == g->n_types - 1)
-    sign = 1;
+    sign = -1;
 
   while (length < max_length) {
     if (RandomFloat(0, 1) >= alpha) {  // include alpha = 0

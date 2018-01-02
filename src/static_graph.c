@@ -16,7 +16,6 @@ void GraphInit(StaticGraph *g, long vcount,
   long i;
   g->vcount = vcount;
   g->n_types = n_types;
-  g->max_degree = 0;
   g->vertices = (Vertex *)malloc(vcount * sizeof(Vertex));
   if (g->vertices == NULL) {
     perror("(ERROR) Memory allocation failed\n");
@@ -48,6 +47,8 @@ void GraphDestroy(StaticGraph *g) {
   for (i = 0; i < g->vcount; i++) {
     if (g->vertices[i].neighbors != NULL)
       free(g->vertices[i].neighbors);
+    if (g->vertices[i].name != NULL)
+      free(g->vertices[i].name);
   }
   if (g->vertices != NULL)
     free(g->vertices);
@@ -56,6 +57,8 @@ void GraphDestroy(StaticGraph *g) {
 
 void SetNeighbors(StaticGraph *g, long vertex, long *neighbors, long degree) {
   long i;
+  int type;
+  int is_first;
   if (vertex >= g->vcount) {
     fprintf(stderr, "(ERROR) Vertex %ld is out of index\n", vertex);
     exit(-1);
@@ -67,16 +70,38 @@ void SetNeighbors(StaticGraph *g, long vertex, long *neighbors, long degree) {
     perror("(ERROR) Memory allocation failed\n");
     exit(-1);
   }
-
-  for (i = 0; i < degree; i++) {
-    if (neighbors[i] >= g->vcount) {
-      fprintf(stderr, "(WARNING) Vertex %ld is out of index(Removed)\n", neighbors[i]);
-      continue;
-    }
-    v->neighbors[v->degree++] = neighbors[i];
+  v->type_begin_idx = (long *)malloc(g->n_types * sizeof(long));
+  if (v->type_begin_idx == NULL) {
+    perror("(ERROR) Memory allocation failed\n");
+    exit(-1);
   }
-  if (v->degree > g->max_degree)
-    g->max_degree = v->degree;
+  v->type_end_idx = (long *)malloc(g->n_types * sizeof(long));
+  if (v->type_end_idx == NULL) {
+    perror("(ERROR) Memory allocation failed\n");
+    exit(-1);
+  }
+
+  for (type = 0; type < g->n_types; type++) {
+    is_first = 1;
+    for (i = 0; i < degree; i++) {
+      if (neighbors[i] >= g->vcount) {
+	fprintf(stderr, "(WARNING) Vertex %ld is out of index(Removed)\n", neighbors[i]);
+	continue;
+      }
+      
+      if (g->vertices[neighbors[i]].type == type) {
+	v->neighbors[v->degree++] = neighbors[i];
+	
+	if (is_first) {
+	  is_first = 0;
+	  v->type_begin_idx[type] = degree - 1;
+	}
+      }
+    }
+    v->type_end_idx[type] = degree;
+    if (is_first)
+      v->type_begin_idx[type] = degree;
+  }
 }
 
 
@@ -99,13 +124,12 @@ int RandomPath(StaticGraph *g, char **path, long start,
 	       int max_length, float alpha, int use_meta_path) {
   int length;
   long i;
-  long count;
   long neighbor;
   Vertex current;
   int next_type;
   int sign;
-  long *typed_neighbors;
-
+  long bidx, eidx;
+  
   if (start >= g->vcount) {
     fprintf(stderr, "(ERROR) Vertex %ld is out of index\n", start);
     exit(-1);
@@ -116,17 +140,8 @@ int RandomPath(StaticGraph *g, char **path, long start,
 
   current = g->vertices[start];
   sign = 1;
-  if (use_meta_path) {
-    typed_neighbors = (long *)malloc(sizeof(long) * g->max_degree);
-    if (typed_neighbors == NULL) {
-      perror("(ERROR) Memory allocation failed\n");
-      exit(-1);
-    }
-    if (current.type == g->n_types - 1)
-      sign = -1;
-    else
-      sign = 1;
-  }
+  if (use_meta_path && current.type == g->n_types - 1)
+    sign = 1;
 
   while (length < max_length) {
     if (RandomFloat(0, 1) >= alpha) {  // include alpha = 0
@@ -135,33 +150,24 @@ int RandomPath(StaticGraph *g, char **path, long start,
       else {
 	if (use_meta_path) { // meta path
           next_type = current.type + sign;
-
-	  count = 0;
-	  for (i = 0; i < current.degree; i++) {
-	    neighbor = current.neighbors[i];
-	    if (next_type == g->vertices[neighbor].type)
-	      typed_neighbors[count++] = neighbor;
-          }
-	  if (count == 0)
+	  bidx = current.type_begin_idx[next_type];
+	  eidx = current.type_end_idx[next_type];
+	  if (eidx == bidx)
 	    break;
-	  i = RandomInteger(0, count);
-	  neighbor = typed_neighbors[i];
-	  strcpy(path[length++], g->vertices[neighbor].name);
+	  i = RandomInteger(bidx, eidx);
           if (next_type == 0 || next_type == g->n_types - 1)
             sign = -sign;
 	}
-	else {
+	else
 	  i = RandomInteger(0, current.degree);
-	  neighbor = current.neighbors[i];
-	  strcpy(path[length++], g->vertices[neighbor].name);
-	}
+
+	neighbor = current.neighbors[i];
+	strcpy(path[length++], g->vertices[neighbor].name);
       }
     } else  // restart from the starting point
       strcpy(path[length++], g->vertices[start].name);
     current = g->vertices[neighbor];
   }
-  if (use_meta_path)
-    free(typed_neighbors);
   return length;
 }
 
@@ -225,7 +231,6 @@ void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
   global.length = path_length;
   global.alpha = alpha;
   global.meta = use_meta_path;
-  printf("max degree: %ld\n", g->max_degree);
 
   files = (FILE **)malloc(n_jobs * sizeof(FILE *));
   if (files == NULL) {
@@ -258,7 +263,7 @@ long RandomInteger(long low, long high) {
   return (long)(ran_uniform() * (high - low)) + low;
 }
 
-// Generate a random float in [low, high]
+// Generate a random float in [low, high)
 // 
 double RandomFloat(double low, double high) {
   return ran_uniform() * (high - low) + low;

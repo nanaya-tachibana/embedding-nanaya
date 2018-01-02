@@ -244,7 +244,8 @@ class Word2vec:
         words_pow = sum(v['freq'] ** self.alpha for v in self.vocab)
         idx = 0
         cumulated = 0
-        for v in self.vocab:
+        print('Build unigram table')
+        for v in tqdm(self.vocab):
             word, freq = v['word'], v['freq']
             cumulated += freq ** self.alpha / words_pow
             while (idx < self.unigram_table_size

@@ -14,7 +14,9 @@ long total_node_count;
 
 
 typedef struct Vertex {
-  long *neighbors;
+  long *neighbors;  // neighbors are sorted by type, e.g. (t0, t0, t1, t1, t2, t3)
+  long *type_begin_idx;  // the indice of the first neighbor of one particular type
+  long *type_end_idx;
   long degree;
   int type;
   char *name;
@@ -25,7 +27,6 @@ typedef struct StaticGraph {
   Vertex *vertices;
   int n_types;
   long vcount;
-  long max_degree;
 } StaticGraph;
 
 

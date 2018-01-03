@@ -139,6 +139,9 @@ int RandomPath(StaticGraph *g, char **path, long start,
     exit(-1);
   }
 
+  if (g->n_types == 1)
+    use_meta_path = 0;
+  
   length = 0;
   strcpy(path[length++], g->vertices[start].name);
 

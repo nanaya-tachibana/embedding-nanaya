@@ -276,16 +276,17 @@ class Node2vec(Word2vec):
               path_length=80,
               num_per_vertex=10,
               alpha=0,
-              output_dir='.',
               use_meta_path=0,
+              output_file=None,
               n_jobs=os.cpu_count()):
         builder = RandomWalkCorpus(g)
         corpus_file = builder.build_corpus(
             path_length=path_length,
             num_per_vertex=num_per_vertex,
             alpha=alpha,
-            output_dir=output_dir,
             use_meta_path=use_meta_path,
+            output_file=output_file,
             n_jobs=n_jobs)
         print('')
         super().train(corpus_file, n_jobs=n_jobs)
+        builder.clear_temp_files()

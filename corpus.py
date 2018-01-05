@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 
+from sklearn.preprocessing import normalize
 import networkx as nx
 import random_walk
 
@@ -15,9 +16,11 @@ class RandomWalkCorpus:
     """
     def __init__(self, g):
         self._g = g
-        self.node_names = list(g.nodes())
+        self.node_names = list(g)
         mapping = dict(zip(self.node_names, range(len(self.node_names))))
         nx.relabel_nodes(self._g, mapping, copy=False)
+
+        self.node_names = list(map(str, self.node_names))
 
     def build_corpus(self,
                      path_length=80,
@@ -56,3 +59,11 @@ class RandomWalkCorpus:
 
     def clear_temp_files(self):
         shutil.rmtree(self.temp_dir)
+
+    def get_normalized_adj(self, node_list):
+        mapping = dict(zip(self.node_names, range(len(self.node_names))))
+        node_list = [mapping[v] for v in node_list]
+        return normalize(nx.adj_matrix(self._g, nodelist=node_list),
+                         axis=1, norm='l1')
+        
+

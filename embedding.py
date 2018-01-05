@@ -85,7 +85,7 @@ class Vocab:
         count = 0
         vocab = []
         for d in self:
-            if d['freq'] < min_count:
+            if d['freq'] < min_count and d['word'] != '</s>':
                 count += d['freq']
             else:
                 vocab.append(d)
@@ -157,7 +157,7 @@ class Word2vec:
     def save(self, filename):
         pass
 
-    def save_word2vec_binary(self, filename):
+    def save_word2vec_format(self, filename):
         with open(filename, 'wb') as f:
             f.write(b'%d %d\n' % (len(self.vocab), self.embedding_size))
             for i, v in enumerate(self.vocab):
@@ -171,10 +171,10 @@ class Word2vec:
     def train(self, filename, n_jobs=os.cpu_count()):
         print('Load training data.')
         if not self.trained:
+            self.vocab.add_word('</s>')
             train_words = self._load_train_file(filename)
         else:
             train_words = self._load_train_file(filename, unigram_online=True)
-        self.vocab.add_word('</s>')
 
         vocab_size = len(self.vocab)
         if self.syn1neg is not None:
@@ -278,6 +278,7 @@ class Node2vec(Word2vec):
               alpha=0,
               use_meta_path=0,
               output_file=None,
+              apply_neu=True,
               n_jobs=os.cpu_count()):
         builder = RandomWalkCorpus(g)
         corpus_file = builder.build_corpus(
@@ -290,3 +291,12 @@ class Node2vec(Word2vec):
         print('')
         super().train(corpus_file, n_jobs=n_jobs)
         builder.clear_temp_files()
+
+        if apply_neu:
+            node_list = [v['word'] for v in self.vocab if v['word'] != '</s>']
+            A = builder.get_normalized_adj(node_list)
+            self.apply_neu(A)
+
+    def apply_neu(self, A, lambda1=0.5, lambda2=0.25):
+        self.syn0[1:, :] = (self.syn0[1:, :] + lambda1 * A * self.syn0[1:, ]
+                            + lambda2 * A * (A * self.syn0[1:, ]))

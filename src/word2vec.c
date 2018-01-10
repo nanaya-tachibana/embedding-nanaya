@@ -41,20 +41,48 @@ void ReadWord(char *word, FILE *fin, char *eof) {
   word[a] = 0;
 }
 
+// Returns hash value of a word
+int GetWordHash(char *word) {
+  unsigned long long a, hash = 0;
+  for (a = 0; a < strlen(word); a++) hash = hash * 257 + word[a];
+  hash = hash % vocab_hash_size;
+  return hash;
+}
+
+// Returns position of a word in the vocabulary; if the word is not found, returns -1
+int SearchVocab(char *word) {
+  unsigned int hash = GetWordHash(word);
+  while (1) {
+    if (vocab_hash[hash] == -1) return -1;
+    if (!strcmp(word, vocab[vocab_hash[hash]].word)) return vocab_hash[hash];
+    hash = (hash + 1) % vocab_hash_size;
+  }
+  return -1;
+}
 
 // Reads a word and returns its index in the vocabulary
 int ReadWordIndex(FILE *fin, char *eof) {
   char word[MAX_STRING], eof_l = 0;
-  khint_t k;
   ReadWord(word, fin, &eof_l);
   if (eof_l) {
     *eof = 1;
     return -1;
   }
-  k = kh_get(VocabHash, word_hash, word);
-  if (k == kh_end(word_hash))
-    return -1;
-  return kh_val(word_hash, k);
+  return SearchVocab(word);
+}
+
+// Adds a word to the vocabulary
+int AddWordToVocab(char *word) {
+  unsigned int hash, length = strlen(word) + 1;
+  if (length > MAX_STRING) length = MAX_STRING;
+  vocab[vocab_size].word = (char *)calloc(length, sizeof(char));
+  strcpy(vocab[vocab_size].word, word);
+  vocab[vocab_size].cn = 0;
+  vocab_size++;
+  hash = GetWordHash(word);
+  while (vocab_hash[hash] != -1) hash = (hash + 1) % vocab_hash_size;
+  vocab_hash[hash] = vocab_size - 1;
+  return vocab_size - 1;
 }
 
 
@@ -67,21 +95,22 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
 	       real _sample, int _iter, int _debug_mode, int _n_jobs) {
   long long i;
   FILE *fin;
-  int return_value;
-  khint_t k;
+  long long idx;
 
-  vocab_size = _vocab_size;
-  vocab = (Vocab *)malloc(sizeof(Vocab) * vocab_size);
+  vocab_hash_size = 30000000;
+  vocab_hash = (int *)calloc(vocab_hash_size, sizeof(int));
+  for (i = 0; i < vocab_hash_size; i++) vocab_hash[i] = -1;
+
+  vocab = (Vocab *)malloc(sizeof(Vocab) * _vocab_size);
   if (vocab == NULL) {
     fprintf(stderr, "Vocab out of memory\n");
     exit(-1);
   }
-  word_hash = kh_init(VocabHash);
-  for (i = 0; i < vocab_size; i++) {
-    k = kh_put(VocabHash, word_hash, _words[i], &return_value);
-    kh_val(word_hash, k) = i;
-    vocab[i].freq = _word_freqs[i];
-    vocab[i].cumgrad = EPS;
+  vocab_size = 0;
+  for (i = 0; i < _vocab_size; i++) {
+    idx = AddWordToVocab(_words[i]);
+    vocab[idx].cn = _word_freqs[i];
+    vocab[idx].cumgrad = EPS;
   }
 
   cbow = _cbow;
@@ -131,7 +160,10 @@ void TrainModel() {
     pthread_join(pt[a], NULL);
   free(pt);
   free(exp_table);
+  for (a = 0; a < vocab_size; a++)
+    free(vocab[a].word);
   free(vocab);
+  free(vocab_hash);
 }
 
 
@@ -152,7 +184,7 @@ void *TrainModelThread(void *id) {
       word_count_actual += word_count - last_word_count;
       last_word_count = word_count;
       if ((debug_mode > 1)) {
-        now=clock();
+        now = clock();
         printf("%cProgress: %.2f%%  Words/thread/sec: %.2fk  ", 13,
          word_count_actual / (real)(iter * train_words + 1) * 100,
          word_count_actual / ((real)(now - start + 1) / (real)CLOCKS_PER_SEC * 1000));
@@ -172,7 +204,7 @@ void *TrainModelThread(void *id) {
         if (word == 0) break;
         // The subsampling randomly discards frequent words while keeping the ranking same
         if (sample > 0) {
-          real ran = (sqrt(vocab[word].freq / (sample * train_words)) + 1) * (sample * train_words) / vocab[word].freq;
+          real ran = (sqrt(vocab[word].cn / (sample * train_words)) + 1) * (sample * train_words) / vocab[word].cn;
           next_random = next_random * (unsigned long long)25214903917 + 11;
           if (ran < (next_random & 0xFFFF) / (real)65536) continue;
         }

@@ -17,11 +17,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 from sklearn.preprocessing import MultiLabelBinarizer
 
-from ..embedding import Node2vec
+from embedding import Node2vec
 
 
 def train_embeddings(g, output):
-    model = Node2vec(cbow=1,
+    model = Node2vec(cbow=0,
                      embedding_size=128,
                      window=10,
                      negative=5,
@@ -73,12 +73,12 @@ def run_experiment(X, labels, test_size=0.1, random_state=0):
 
 
 if __name__ == '__main__':
-    blogcata = loadmat('../example_graphs/blogcatalog.mat')
+    blogcata = loadmat('example_graphs/blogcatalog.mat')
     g = nx.from_scipy_sparse_matrix(blogcata['network'])
     labels = blogcata['group']
 
     filename = 'blogcata.bin'
-    # train_embeddings(g, filename)
+    train_embeddings(g, filename)
     embed = KeyedVectors.load_word2vec_format(filename, binary=True)
     X = embed.wv[list(map(str, range(labels.shape[0])))]
     micro_df = pd.DataFrame(np.zeros(shape=(1, 9)),

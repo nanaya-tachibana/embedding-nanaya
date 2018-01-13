@@ -4,6 +4,7 @@
 #include <math.h>
 #include <errno.h>
 #include <pthread.h>
+#include "khash.h"
 
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 1000
@@ -14,20 +15,19 @@
 
 
 typedef float real;  // Precision of float numbers
-long vocab_hash_size;  // Maximum 100 * 0.7 = 70M words in the vocabulary
+
 
 typedef struct Vocab {
-  long long cn;
-  // int *point;
-  char *word;
+  long long freq;
   real cumgrad; // cumulative gradient
-  // char *code, codelen;
 } Vocab;
 
-Vocab *vocab;
-int *vocab_hash;
-long long vocab_size;
 
+KHASH_MAP_INIT_STR(VocabHash, long long);
+
+Vocab *vocab;
+khash_t(VocabHash) *word_hash;
+long long vocab_size;
 long long *unigram_table;
 long long unigram_table_size;
 real *syn0;

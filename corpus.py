@@ -55,7 +55,7 @@ class RandomWalkCorpus:
             for temp_file in temp_files:
                 with open(temp_file, 'rb') as src:
                     shutil.copyfileobj(src, dst)
-                os.rm(temp_file)
+                os.remove(temp_file)
         return output_file
 
     def get_normalized_adj(self, node_list):

@@ -22,7 +22,7 @@ if __name__ == '__main__':
                 shutil.copyfileobj(r.raw, f)
         with ZipFile(zip_file, 'r') as zf:
             zf.extract('text8', path=os.path.dirname(filename))
-        os.rm(zip_file)
+        os.remove(zip_file)
 
     model = Word2vec(cbow=1,
                      embedding_size=200,

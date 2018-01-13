@@ -55,15 +55,17 @@ class RandomWalkCorpus:
             for temp_file in temp_files:
                 with open(temp_file, 'rb') as src:
                     shutil.copyfileobj(src, dst)
+                os.rm(temp_file)
         return output_file
-
-    def clear_temp_files(self):
-        shutil.rmtree(self.temp_dir)
 
     def get_normalized_adj(self, node_list):
         mapping = dict(zip(self.node_names, range(len(self.node_names))))
         node_list = [mapping[v] for v in node_list]
         return normalize(nx.adj_matrix(self._g, nodelist=node_list),
                          axis=1, norm='l1')
+
+    def __del__(self):
+        shutil.rmtree(self.temp_dir)
+
         
 

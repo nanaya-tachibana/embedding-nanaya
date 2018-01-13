@@ -38,7 +38,7 @@ def train_w2v(list vocab,
               embedding_size, negative, window, init_learning_rate,
               linear_learning_rate_decay,
               sample, iters, debug_mode, n_jobs)
+    free(words)
     with nogil:
         TrainModel()
-    free(words)
 

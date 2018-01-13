@@ -290,7 +290,6 @@ class Node2vec(Word2vec):
             n_jobs=n_jobs)
         print('')
         super().train(corpus_file, n_jobs=n_jobs)
-        builder.clear_temp_files()
 
         if apply_neu:
             node_list = [v['word'] for v in self.vocab if v['word'] != '</s>']

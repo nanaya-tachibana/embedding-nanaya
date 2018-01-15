@@ -1,10 +1,15 @@
 import os
+import string
+import secrets
 import shutil
-import tempfile
 
 from sklearn.preprocessing import normalize
 import networkx as nx
 import random_walk
+
+
+def id_generator(size=6, chars=string.ascii_uppercase + string.digits):
+    return ''.join(secrets.choice(chars) for _ in range(size))
 
 
 class RandomWalkCorpus:
@@ -36,7 +41,8 @@ class RandomWalkCorpus:
         n_types = len(set(node_types))
         node_names = [name.encode('UTF-8') for name in self.node_names]
 
-        self.temp_dir = tempfile.mkdtemp()
+        self.temp_dir = '_'.join(['.random_walk', id_generator()])
+        os.mkdir(self.temp_dir)
         output = os.path.join(self.temp_dir, 'random_walk')
         print('Generate random walk corpus.')
         random_walk.build_random_walk_corpus(
@@ -66,6 +72,3 @@ class RandomWalkCorpus:
 
     def __del__(self):
         shutil.rmtree(self.temp_dir)
-
-        
-

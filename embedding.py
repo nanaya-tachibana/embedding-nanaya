@@ -169,6 +169,22 @@ class Word2vec:
                 f.write(b'\n')
 
     def train(self, filename, n_jobs=os.cpu_count()):
+        train_words, words, word_freqs = self._setup(filename)
+        print('Vocab size: ', len(self.vocab))
+        print('Words in train file: ', train_words)
+        print('Train embedding model.')
+        word2vec.train_w2v([w.encode('UTF-8') for w in words], word_freqs,
+                           self.unigram_table, self.unigram_table_size,
+                           self.syn0, self.syn1neg, self.cbow,
+                           train_words, filename.encode('UTF-8'),
+                           self.embedding_size, self.negative, self.window,
+                           self.learning_rate, self.linear_learning_rate_decay,
+                           self.sample, self.iters,
+                           self.debug_mode, n_jobs)
+        self.syn0 = self.syn0.reshape((-1, self.embedding_size))
+        self.trained = True
+
+    def _setup(self, filename):
         print('Load training data.')
         if not self.trained:
             self.vocab.add_word('</s>')
@@ -202,20 +218,7 @@ class Word2vec:
 
         words, word_freqs = zip(*[(v['word'], v['freq']) for v in self.vocab])
         word_freqs = np.array(word_freqs, dtype=np.int64)
-
-        print('Vocab size: ', len(words))
-        print('Words in train file: ', train_words)
-        print('Train embedding model.')
-        word2vec.train_w2v([w.encode('UTF-8') for w in words], word_freqs,
-                           self.unigram_table, self.unigram_table_size,
-                           self.syn0, self.syn1neg, self.cbow,
-                           train_words, filename.encode('UTF-8'),
-                           self.embedding_size, self.negative, self.window,
-                           self.learning_rate, self.linear_learning_rate_decay,
-                           self.sample, self.iters,
-                           self.debug_mode, n_jobs)
-        self.syn0 = self.syn0.reshape((-1, self.embedding_size))
-        self.trained = True
+        return train_words, words, word_freqs
 
     def _load_train_file(self, filename, unigram_online=False):
         word_count = 0

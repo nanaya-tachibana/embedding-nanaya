@@ -2,9 +2,10 @@ import os
 from array import array
 import random
 import numpy as np
-import word2vec
 
+from sklearn.preprocessing import normalize
 from corpus import RandomWalkCorpus
+import word2vec
 
 from tqdm import tqdm
 
@@ -194,7 +195,7 @@ class Word2vec:
 
         vocab_size = len(self.vocab)
         if self.syn1neg is not None:
-            temp = self.syn0
+            temp = self.syn1neg
             self.syn1neg = np.zeros(self.embedding_size * vocab_size,
                                     dtype=np.float32)
             self.syn1neg[:self.embedding_size*temp.shape[0]] = temp.flatten()
@@ -275,7 +276,10 @@ class Word2vec:
 
 class Node2vec(Word2vec):
 
-    def train(self, g,
+    def train(self,
+              adj_matrix,
+              node_names,
+              node_types=None,
               path_length=80,
               num_per_vertex=10,
               alpha=0,
@@ -283,7 +287,7 @@ class Node2vec(Word2vec):
               output_file=None,
               apply_neu=True,
               n_jobs=os.cpu_count()):
-        builder = RandomWalkCorpus(g)
+        builder = RandomWalkCorpus(adj_matrix, node_names, node_types)
         corpus_file = builder.build_corpus(
             path_length=path_length,
             num_per_vertex=num_per_vertex,
@@ -294,10 +298,103 @@ class Node2vec(Word2vec):
         print('')
         super().train(corpus_file, n_jobs=n_jobs)
 
+        self.syn0 = normalize(self.syn0)
         if apply_neu:
             node_list = [v['word'] for v in self.vocab if v['word'] != '</s>']
             A = builder.get_normalized_adj(node_list)
             self.apply_neu(A)
+
+    def apply_neu(self, A, lambda1=0.5, lambda2=0.25):
+        self.syn0[1:, :] = (self.syn0[1:, :] + lambda1 * A.dot(self.syn0[1:, ])
+                            + lambda2 * A.dot(A.dot(self.syn0[1:, ])))
+
+
+class Node2vecWithRank(Node2vec):
+
+    def __init__(self,
+                 cbow=0,
+                 embedding_size=100,
+                 window=10,
+                 negative=5,
+                 learning_rate=0.025,
+                 linear_learning_rate_decay=1,
+                 sample=1e-5,
+                 iters=1,
+                 alpha=0.75,
+                 debug_mode=2,
+                 min_count=5,
+                 max_unigram_table_size=int(1e8),
+                 max_vocab_size=int(1e8)):
+        super().__init__(cbow=0,
+                         embedding_size=100,
+                         window=10,
+                         negative=5,
+                         learning_rate=0.025,
+                         linear_learning_rate_decay=1,
+                         sample=1e-5,
+                         iters=1,
+                         alpha=0.75,
+                         debug_mode=2,
+                         min_count=5,
+                         max_unigram_table_size=int(1e8),
+                         max_vocab_size=int(1e8))
+        self.rank1neg = None
+
+    def train(self,
+              adj_matrix,
+              node_names,
+              node_types=None,
+              path_length=80,
+              num_per_vertex=10,
+              alpha=0,
+              use_meta_path=0,
+              output_file=None,
+              apply_neu=False,
+              n_jobs=os.cpu_count()):
+        builder = RandomWalkCorpus(adj_matrix, node_names, node_types)
+        corpus_file = builder.build_corpus(
+            path_length=path_length,
+            num_per_vertex=num_per_vertex,
+            alpha=alpha,
+            use_meta_path=use_meta_path,
+            output_file=output_file,
+            n_jobs=n_jobs)
+        train_words, words, word_freqs = self._setup(corpus_file)
+
+        print('')
+        print('Vocab size: ', len(self.vocab))
+        print('Words in train file: ', train_words)
+        print('Train embedding model.')
+        word2vec.train_w2v([w.encode('UTF-8') for w in words], word_freqs,
+                           self.unigram_table, self.unigram_table_size,
+                           self.syn0, self.syn1neg, self.cbow,
+                           train_words, corpus_file.encode('UTF-8'),
+                           self.embedding_size, self.negative, self.window,
+                           self.learning_rate, self.linear_learning_rate_decay,
+                           self.sample, self.iters,
+                           builder.outdegree, builder.indegree,
+                           self.debug_mode, n_jobs)
+        self.syn0 = self.syn0.reshape((-1, self.embedding_size))
+        self.trained = True
+
+        if apply_neu:
+            node_list = [v['word'] for v in self.vocab if v['word'] != '</s>']
+            A = builder.get_normalized_adj(node_list)
+            self.apply_neu(A)
+
+    def _setup(self, filename):
+        train_words, words, word_freqs = super()._setup(filename)
+        vocab_size = len(self.vocab)
+        if self.rank1neg is not None:
+            temp = self.rank1neg
+            self.rank1neg = np.zeros(self.embedding_size * vocab_size,
+                                     dtype=np.float32)
+            self.rank1neg[:self.embedding_size*temp.shape[0]] = temp.flatten()
+            del temp
+        else:
+            self.rank1neg = np.zeros(self.embedding_size * vocab_size,
+                                     dtype=np.float32)
+        return train_words, words, word_freqs
 
     def apply_neu(self, A, lambda1=0.5, lambda2=0.25):
         self.syn0[1:, :] = (self.syn0[1:, :] + lambda1 * A * self.syn0[1:, ]

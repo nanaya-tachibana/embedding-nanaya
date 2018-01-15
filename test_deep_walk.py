@@ -29,7 +29,12 @@ def train_embeddings(g, output):
                      linear_learning_rate_decay=1,
                      sample=1e-4,
                      iters=5)
-    model.train(g, path_length=40, num_per_vertex=80)
+    node_names = list(map(str, list(g)))
+    model.train(nx.adj_matrix(g),
+                node_names,
+                path_length=40,
+                num_per_vertex=80,
+                apply_neu=True)
     model.save_word2vec_format(output)
 
 

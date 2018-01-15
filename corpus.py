@@ -4,7 +4,7 @@ import secrets
 import shutil
 
 from sklearn.preprocessing import normalize
-import networkx as nx
+import numpy as np
 import random_walk
 
 
@@ -19,13 +19,15 @@ class RandomWalkCorpus:
     g: networkx graph obejct
        The input graph.
     """
-    def __init__(self, g):
-        self._g = g
-        self.node_names = list(g)
-        mapping = dict(zip(self.node_names, range(len(self.node_names))))
-        nx.relabel_nodes(self._g, mapping, copy=False)
-
-        self.node_names = list(map(str, self.node_names))
+    def __init__(self, adj_matrix, node_names, node_types=None):
+        self.adj_matrix = adj_matrix
+        self.node_names = node_names
+        self.node_types = node_types or np.zeros(len(node_names),
+                                                 dtype=np.int32)
+        self.outdegree = self.adj_matrix.sum(axis=1, dtype=np.int32)
+        self.outdegree = np.array(self.outdegree).flatten()
+        self.indegree = self.adj_matrix.sum(axis=0, dtype=np.int32)
+        self.indegree = np.array(self.indegree).flatten()
 
     def build_corpus(self,
                      path_length=80,
@@ -34,22 +36,17 @@ class RandomWalkCorpus:
                      use_meta_path=0,
                      output_file=None,
                      n_jobs=os.cpu_count()):
-        adj_list = [list(self._g.adj[i].keys())
-                    for i in range(len(self.node_names))]
-        node_types = [self._g.node[i].get('type', 0)
-                      for i in range(len(self.node_names))]
-        n_types = len(set(node_types))
-        node_names = [name.encode('UTF-8') for name in self.node_names]
+        n_types = len(np.unique(self.node_types))
 
         self.temp_dir = '_'.join(['.random_walk', id_generator()])
         os.mkdir(self.temp_dir)
         output = os.path.join(self.temp_dir, 'random_walk')
         print('Generate random walk corpus.')
         random_walk.build_random_walk_corpus(
-            adj_list,
-            node_types,
+            self.adj_matrix,
+            self.node_types,
             n_types,
-            node_names,
+            [name.encode('UTF-8') for name in self.node_names],
             output.encode('UTF-8'),
             path_length, num_per_vertex,
             alpha, use_meta_path, n_jobs)
@@ -66,9 +63,8 @@ class RandomWalkCorpus:
 
     def get_normalized_adj(self, node_list):
         mapping = dict(zip(self.node_names, range(len(self.node_names))))
-        node_list = [mapping[v] for v in node_list]
-        return normalize(nx.adj_matrix(self._g, nodelist=node_list),
-                         axis=1, norm='l1')
+        node_list = [mapping[node] for node in node_list]
+        return normalize(self.adj_matrix[node_list, :], axis=1, norm='l1')
 
     def __del__(self):
         shutil.rmtree(self.temp_dir)

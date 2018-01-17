@@ -22,12 +22,15 @@ class RandomWalkCorpus:
     def __init__(self, adj_matrix, node_names, node_types=None):
         self.adj_matrix = adj_matrix
         self.node_names = node_names
-        self.node_types = node_types or np.zeros(len(node_names),
-                                                 dtype=np.int32)
-        self.outdegree = self.adj_matrix.sum(axis=1, dtype=np.int32)
-        self.outdegree = np.array(self.outdegree).flatten()
-        self.indegree = self.adj_matrix.sum(axis=0, dtype=np.int32)
-        self.indegree = np.array(self.indegree).flatten()
+        if node_types is None:
+            self.node_types = np.zeros(len(node_names), dtype=np.uint8)
+        else:
+            self.node_types = np.array(node_types, dtype=np.uint8)
+
+        self.outdegree = self.adj_matrix.sum(axis=1, dtype=np.int)
+        self.outdegree = np.array(self.outdegree, dtype=np.int).flatten()
+        self.indegree = self.adj_matrix.sum(axis=0, dtype=np.int)
+        self.indegree = np.array(self.indegree, dtype=np.int).flatten()
 
     def build_corpus(self,
                      path_length=80,

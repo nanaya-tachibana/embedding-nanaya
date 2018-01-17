@@ -298,11 +298,11 @@ class Node2vec(Word2vec):
         print('')
         super().train(corpus_file, n_jobs=n_jobs)
 
-        self.syn0 = normalize(self.syn0)
         if apply_neu:
             node_list = [v['word'] for v in self.vocab if v['word'] != '</s>']
             A = builder.get_normalized_adj(node_list)
             self.apply_neu(A)
+            self.syn0 = normalize(self.syn0)
 
     def apply_neu(self, A, lambda1=0.5, lambda2=0.25):
         self.syn0[1:, :] = (self.syn0[1:, :] + lambda1 * A.dot(self.syn0[1:, ])
@@ -325,19 +325,19 @@ class Node2vecWithRank(Node2vec):
                  min_count=5,
                  max_unigram_table_size=int(1e8),
                  max_vocab_size=int(1e8)):
-        super().__init__(cbow=0,
-                         embedding_size=100,
-                         window=10,
-                         negative=5,
-                         learning_rate=0.025,
-                         linear_learning_rate_decay=1,
-                         sample=1e-5,
-                         iters=1,
-                         alpha=0.75,
-                         debug_mode=2,
-                         min_count=5,
-                         max_unigram_table_size=int(1e8),
-                         max_vocab_size=int(1e8))
+        super().__init__(cbow=cbow,
+                         embedding_size=embedding_size,
+                         window=window,
+                         negative=negative,
+                         learning_rate=learning_rate,
+                         linear_learning_rate_decay=linear_learning_rate_decay,
+                         sample=sample,
+                         iters=iters,
+                         alpha=alpha,
+                         debug_mode=debug_mode,
+                         min_count=min_count,
+                         max_unigram_table_size=max_unigram_table_size,
+                         max_vocab_size=max_vocab_size)
         self.rank1neg = None
 
     def train(self,
@@ -347,6 +347,7 @@ class Node2vecWithRank(Node2vec):
               path_length=80,
               num_per_vertex=10,
               alpha=0,
+              lambd=0.01,
               use_meta_path=0,
               output_file=None,
               apply_neu=False,
@@ -365,15 +366,16 @@ class Node2vecWithRank(Node2vec):
         print('Vocab size: ', len(self.vocab))
         print('Words in train file: ', train_words)
         print('Train embedding model.')
-        word2vec.train_w2v([w.encode('UTF-8') for w in words], word_freqs,
-                           self.unigram_table, self.unigram_table_size,
-                           self.syn0, self.syn1neg, self.cbow,
-                           train_words, corpus_file.encode('UTF-8'),
-                           self.embedding_size, self.negative, self.window,
-                           self.learning_rate, self.linear_learning_rate_decay,
-                           self.sample, self.iters,
-                           builder.outdegree, builder.indegree,
-                           self.debug_mode, n_jobs)
+        word2vec.train_w2v_with_rank(
+            [w.encode('UTF-8') for w in words], word_freqs,
+            self.unigram_table, self.unigram_table_size,
+            self.syn0, self.syn1neg, self.cbow,
+            train_words, corpus_file.encode('UTF-8'),
+            self.embedding_size, self.negative, self.window,
+            self.learning_rate, self.linear_learning_rate_decay,
+            self.sample, self.iters,
+            builder.outdegree, builder.indegree, self.rank1neg, lambd,
+            self.debug_mode, n_jobs)
         self.syn0 = self.syn0.reshape((-1, self.embedding_size))
         self.trained = True
 
@@ -387,13 +389,17 @@ class Node2vecWithRank(Node2vec):
         vocab_size = len(self.vocab)
         if self.rank1neg is not None:
             temp = self.rank1neg
-            self.rank1neg = np.zeros(self.embedding_size * vocab_size,
-                                     dtype=np.float32)
+            self.rank1neg = np.array(
+                np.random.uniform(
+                    -0.5, 0.5, self.embedding_size * vocab_size),
+                dtype=np.float32)
             self.rank1neg[:self.embedding_size*temp.shape[0]] = temp.flatten()
             del temp
         else:
-            self.rank1neg = np.zeros(self.embedding_size * vocab_size,
-                                     dtype=np.float32)
+            self.rank1neg = np.array(
+                np.random.uniform(
+                    -0.5, 0.5, self.embedding_size * vocab_size),
+                dtype=np.float32)
         return train_words, words, word_freqs
 
     def apply_neu(self, A, lambda1=0.5, lambda2=0.25):

@@ -13,7 +13,6 @@
 //  limitations under the License.
 #include "word2vec.h"
 
-
 // Reads a single word from a file, assuming space + tab + EOL to be word boundaries
 void ReadWord(char *word, FILE *fin, char *eof) {
   int a = 0, ch;
@@ -64,7 +63,9 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
 	       long long _train_words, char *_train_file,
 	       long long _embedding_size, int _negative, int _window,
 	       real _init_learning_rate, int _linear_learning_rate_decay,
-	       real _sample, int _iter, int _debug_mode, int _n_jobs) {
+	       real _sample, int _iter, long long *_out_degree,
+	       long long *_in_degree, real *_rank1neg, float _lambda,
+	       int _debug_mode, int _n_jobs) {
   long long i;
   FILE *fin;
   int return_value;
@@ -89,6 +90,9 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
   unigram_table_size = _unigram_table_size;
   syn0 = _syn0;
   syn1neg = _syn1neg;
+  out_degree = _out_degree;
+  in_degree = _in_degree;
+  rank1neg = _rank1neg;
   exp_table = (real *)malloc((EXP_TABLE_SIZE + 1) * sizeof(real));
   if (exp_table == NULL) {
     fprintf(stderr, "Exp table out of memory\n");
@@ -106,6 +110,7 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
   alpha = starting_alpha;
   sample = _sample;
   iter = _iter;
+  lambda = _lambda;
   debug_mode = _debug_mode;
   linear = _linear_learning_rate_decay;
 
@@ -137,11 +142,13 @@ void TrainModel() {
 
 void *TrainModelThread(void *id) {
   long long a, b, d, cw, word, last_word, sentence_length = 0, sentence_position = 0;
+  long long i, j;
   long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
   long long l1, l2, c, target, label, local_iter = iter;
   unsigned long long next_random = (long long)id;
   char eof = 0;
   real f, g;
+  real g1, g2;
   clock_t now;
   real *neu1 = (real *)calloc(layer1_size, sizeof(real));
   real *neu1e = (real *)calloc(layer1_size, sizeof(real));
@@ -259,6 +266,7 @@ void *TrainModelThread(void *id) {
 	  if (c < 0) continue;
 	  if (c >= sentence_length) continue;
 	  last_word = sen[c];
+
 	  if (last_word == -1) continue;
 	  l1 = last_word * layer1_size;
 	  for (c = 0; c < layer1_size; c++) neu1e[c] = 0;
@@ -292,6 +300,30 @@ void *TrainModelThread(void *id) {
 	    }
 	  // Learn weights input -> hidden
 	  for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+	}
+    }
+    if (rank1neg != NULL && sentence_position != 0) {
+      i = sen[sentence_position - 1];
+      l1 = i * layer1_size;
+      j = word;
+      l2 = j * layer1_size;
+      g = 0;
+      for (c = 0; c < layer1_size; c++) g += syn0[c + l1] * rank1neg[c + l1];
+      g = out_degree[i] != 0 ? g / out_degree[i] * (g > 0) : 0;
+      f = 0;
+      for (c = 0; c < layer1_size; c++) f += syn0[c + l2] * rank1neg[c + l2];
+      f = in_degree[j] != 0 ? f / in_degree[j] * (f > 0) : 0;
+      g1 = out_degree[i] != 0 ? alpha * lambda * 2 * in_degree[j] / out_degree[i] * (f - g) * (g > 0) : 0;
+      g2 = -alpha * lambda * 2 * (f - g) * (f > 0);
+      if (g1 != 0)
+	for (c = 0; c < layer1_size; c++) {
+	  syn0[c + l1] += g1 * rank1neg[c + l1];
+	  rank1neg[c + l1] += g1 * syn0[c + l1];
+	}
+      if (g2 != 0)
+	for (c = 0; c < layer1_size; c++) {
+	  syn0[c + l2] += g2 * rank1neg[c + l2];
+	  rank1neg[c + l2] += g2 * syn0[c + l2];
 	}
     }
     sentence_position++;

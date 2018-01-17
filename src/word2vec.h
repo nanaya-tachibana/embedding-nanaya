@@ -33,6 +33,9 @@ long long unigram_table_size;
 real *syn0;
 real *syn1neg;
 real *exp_table;
+long long *out_degree;
+long long *in_degree;
+real *rank1neg;
 // params
 int cbow;
 int negative;
@@ -42,8 +45,10 @@ real alpha;
 real starting_alpha;
 real sample;
 long long iter;
+real lambda;
 int debug_mode;
 int linear;
+
 // thread
 clock_t start;
 long long word_count_actual;
@@ -58,6 +63,8 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
 	       long long _train_words, char *_train_file,
 	       long long _embedding_size, int _negative, int _window,
 	       real _init_learning_rate, int _linear_learning_rate_decay,
-	       real _sample, int _iter, int _debug_mode, int _n_jobs);
+	       real _sample, int _iter, long long *_out_degree,
+	       long long *_in_degree, real *_rank1neg, real _lambda,
+	       int _debug_mode, int _n_jobs);
 void TrainModel();
 void *TrainModelThread(void *id);

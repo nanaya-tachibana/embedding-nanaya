@@ -10,10 +10,10 @@ typedef struct {
 } global_t;
 
 
-void GraphInit(StaticGraph *g, long vcount,
-	       char **names, int *types, int n_types) {
-  long name_len;
-  long i;
+void GraphInit(StaticGraph *g, uint32_t vcount,
+	       char **names, uint8_t *types, uint8_t n_types) {
+  int name_len;
+  uint32_t i;
   g->vcount = vcount;
   g->n_types = n_types;
   g->vertices = (Vertex *)malloc(vcount * sizeof(Vertex));
@@ -43,7 +43,7 @@ void GraphInit(StaticGraph *g, long vcount,
 
 
 void GraphDestroy(StaticGraph *g) {
-  long i;
+  uint32_t i;
   for (i = 0; i < g->vcount; i++) {
     if (g->vertices[i].neighbors != NULL)
       free(g->vertices[i].neighbors);
@@ -59,27 +59,28 @@ void GraphDestroy(StaticGraph *g) {
 }
 
 
-void SetNeighbors(StaticGraph *g, long vertex, long *neighbors, long degree) {
-  long i;
+void SetNeighbors(StaticGraph *g, uint32_t vertex,
+		  uint32_t *neighbors, uint32_t degree) {
+  uint32_t i;
   int type;
   int is_first;
   if (vertex >= g->vcount) {
-    fprintf(stderr, "(ERROR) Vertex %ld is out of index\n", vertex);
+    fprintf(stderr, "(ERROR) Vertex %u is out of index\n", vertex);
     exit(-1);
   }
 
   Vertex *v = &g->vertices[vertex];
-  v->neighbors = (long *)malloc(degree * sizeof(long));
+  v->neighbors = (uint32_t *)malloc(degree * sizeof(uint32_t));
   if (v->neighbors == NULL) {
     perror("(ERROR) Memory allocation failed\n");
     exit(-1);
   }
-  v->type_begin_idx = (long *)malloc(g->n_types * sizeof(long));
+  v->type_begin_idx = (uint32_t *)malloc(g->n_types * sizeof(uint32_t));
   if (v->type_begin_idx == NULL) {
     perror("(ERROR) Memory allocation failed\n");
     exit(-1);
   }
-  v->type_end_idx = (long *)malloc(g->n_types * sizeof(long));
+  v->type_end_idx = (uint32_t *)malloc(g->n_types * sizeof(uint32_t));
   if (v->type_end_idx == NULL) {
     perror("(ERROR) Memory allocation failed\n");
     exit(-1);
@@ -89,7 +90,7 @@ void SetNeighbors(StaticGraph *g, long vertex, long *neighbors, long degree) {
     is_first = 1;
     for (i = 0; i < degree; i++) {
       if (neighbors[i] >= g->vcount) {
-	fprintf(stderr, "(WARNING) Vertex %ld is out of index(Removed)\n", neighbors[i]);
+	fprintf(stderr, "(WARNING) Vertex %u is out of index(Removed)\n", neighbors[i]);
 	continue;
       }
       
@@ -111,31 +112,31 @@ void SetNeighbors(StaticGraph *g, long vertex, long *neighbors, long degree) {
 
 void GraphPrint(StaticGraph *g) {
   Vertex v;
-  long i, j;
+  uint32_t i, j;
   printf("\n");
   for (i = 0; i < g->vcount; i++) {
     v = g->vertices[i];
-    printf("vertex %ld: [", i);
+    printf("vertex %u: [", i);
     if (v.neighbors != NULL)
       for (j = 0; j < v.degree; j++)
-	printf("%ld, ", v.neighbors[j]);
+	printf("%u, ", v.neighbors[j]);
     printf("]\n");
   }
 }
 
 
-int RandomPath(StaticGraph *g, char **path, long start,
+int RandomPath(StaticGraph *g, char **path, uint32_t start,
 	       int max_length, float alpha, int use_meta_path) {
   int length;
-  long i;
-  long neighbor;
+  uint32_t i;
+  uint32_t neighbor;
   Vertex current;
   int next_type;
   int sign;
   long bidx, eidx;
   
   if (start >= g->vcount) {
-    fprintf(stderr, "(ERROR) Vertex %ld is out of index\n", start);
+    fprintf(stderr, "(ERROR) Vertex %u is out of index\n", start);
     exit(-1);
   }
 
@@ -184,7 +185,7 @@ void SetOutputFile(char *filename) {
 }
 
 
-void GenerateRandomWalkThread(void *_g, long idx, int tid) {
+void GenerateRandomWalkThread(void *_g, uint64_t idx, int tid) {
   char **path;
   int actual_length;
   int i;
@@ -266,8 +267,8 @@ void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
 
 // Generate a random integer in [low, high)
 // 
-long RandomInteger(long low, long high) {
-  return (long)(ran_uniform() * (high - low)) + low;
+uint32_t RandomInteger(uint32_t low, uint32_t high) {
+  return (uint32_t)(ran_uniform() * (high - low)) + low;
 }
 
 // Generate a random float in [low, high)
@@ -309,6 +310,6 @@ int main() {
   /* for (i = 0; i < 10; i++) */
   /*   x[i] = RandomInteger(0, 10); */
   /* for (i = 0; i < 10; i++) */
-  /*   printf("%ld\n", x[i]); */
+  /*   printf("%u\n", x[i]); */
 }
 

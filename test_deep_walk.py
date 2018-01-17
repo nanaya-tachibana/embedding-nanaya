@@ -23,9 +23,9 @@ from embedding import Node2vec
 def train_embeddings(g, output):
     model = Node2vec(cbow=0,
                      embedding_size=128,
-                     window=5,
-                     negative=10,
-                     learning_rate=0.05,
+                     window=10,
+                     negative=5,
+                     learning_rate=0.025,
                      linear_learning_rate_decay=1,
                      sample=1e-4,
                      iters=5)
@@ -34,7 +34,7 @@ def train_embeddings(g, output):
                 node_names,
                 path_length=40,
                 num_per_vertex=80,
-                apply_neu=True)
+                apply_neu=False)
     model.save_word2vec_format(output)
 
 

@@ -69,5 +69,10 @@ class RandomWalkCorpus:
         node_list = [mapping[node] for node in node_list]
         return normalize(self.adj_matrix[node_list, :], axis=1, norm='l1')
 
+    def reindex(self, node_list):
+        mapping = dict(zip(self.node_names, range(len(self.node_names))))
+        node_list = [mapping[node] for node in node_list]
+        return node_list
+
     def __del__(self):
         shutil.rmtree(self.temp_dir)

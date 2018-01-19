@@ -302,19 +302,24 @@ void *TrainModelThread(void *id) {
 	  for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
 	}
     }
-    if (rank1neg != NULL && sentence_position != 0) {
+    if (lambda != 0 && rank1neg != NULL && sentence_position != 0) {
       i = sen[sentence_position - 1];
       l1 = i * layer1_size;
       j = word;
       l2 = j * layer1_size;
       g = 0;
       for (c = 0; c < layer1_size; c++) g += syn0[c + l1] * rank1neg[c + l1];
-      g = out_degree[i] != 0 ? g / out_degree[i] * (g > 0) : 0;
+      if (g > MAX_EXP) g = 0.998;
+      else if (g < -MAX_EXP) g = 0.002;
+      else g = exp_table[(int)((g + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))];
       f = 0;
       for (c = 0; c < layer1_size; c++) f += syn0[c + l2] * rank1neg[c + l2];
-      f = in_degree[j] != 0 ? f / in_degree[j] * (f > 0) : 0;
-      g1 = out_degree[i] != 0 ? alpha * lambda * 2 * in_degree[j] / out_degree[i] * (f - g) * (g > 0) : 0;
-      g2 = -alpha * lambda * 2 * (f - g) * (f > 0);
+      if (f > MAX_EXP) f = 0.998;
+      else if (f < -MAX_EXP) f = 0.002;
+      else f = exp_table[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))];
+
+      g1 = -alpha * lambda * 2 * (f / in_degree[j] - g / out_degree[i]) * f * (1 - f);
+      g2 = alpha * lambda * 2 * (f / out_degree[i] - g * in_degree[j] / out_degree[i] / out_degree[i]) * g * (1 - g);
       if (g1 != 0)
 	for (c = 0; c < layer1_size; c++) {
 	  syn0[c + l1] += g1 * rank1neg[c + l1];

@@ -45,30 +45,32 @@ def train_w2v(list vocab,
     with nogil:
         TrainModel()
 
+
+
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def train_w2v_with_rank(list vocab,
-                        np.ndarray[long long, ndim=1, mode='c'] word_freqs,
-	                np.ndarray[long long, ndim=1, mode='c'] unigram_table,
-                        long long unigram_table_size,
-	                np.ndarray[real, ndim=1, mode='c'] syn0,
-                        np.ndarray[real, ndim=1, mode='c'] syn1neg,
-                        int cbow,
-	                long long train_words,
-                        char *train_file,
-                        long long embedding_size,
-                        int negative,
-                        int window,
-                        real init_learning_rate,
-                        int linear_learning_rate_decay,
-	                real sample,
-                        int iters,
-                        np.ndarray[long long, ndim=1, mode='c'] out_degree,
-                        np.ndarray[long long, ndim=1, mode='c'] in_degree,
-                        np.ndarray[real, ndim=1, mode='c'] rank1neg,
-                        real lambd, 
-                        int debug_mode,
-                        int n_jobs):
+              np.ndarray[long long, ndim=1, mode='c'] word_freqs,
+	      np.ndarray[long long, ndim=1, mode='c'] unigram_table,
+              long long unigram_table_size,
+	      np.ndarray[real, ndim=1, mode='c'] syn0,
+              np.ndarray[real, ndim=1, mode='c'] syn1neg,
+              int cbow,
+	      long long train_words,
+              char *train_file,
+              long long embedding_size,
+              int negative,
+              int window,
+              real init_learning_rate,
+              int linear_learning_rate_decay,
+	      real sample,
+              int iters,
+              np.ndarray[long long, ndim=1, mode='c'] out_degree,
+              np.ndarray[long long, ndim=1, mode='c'] in_degree,
+              np.ndarray[real, ndim=1, mode='c'] rank1neg,
+              real lambd,
+              int debug_mode,
+              int n_jobs):
     cdef long long i
     cdef char **words
     cdef long long vocab_size,
@@ -79,7 +81,7 @@ def train_w2v_with_rank(list vocab,
         raise MemoryError()
     for i in range(vocab_size):
         words[i] = vocab[i]
-
+    # https://github.com/cython/cython/wiki/tutorials-NumpyPointerToC
     InitModel(words, &word_freqs[0], vocab_size, &unigram_table[0],
               unigram_table_size, &syn0[0], &syn1neg[0], cbow,
               train_words, train_file,
@@ -90,5 +92,6 @@ def train_w2v_with_rank(list vocab,
     free(words)
     with nogil:
         TrainModel()
+
 
 

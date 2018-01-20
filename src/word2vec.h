@@ -19,7 +19,6 @@ typedef float real;  // Precision of float numbers
 
 typedef struct Vocab {
   long long freq;
-  real cumgrad; // cumulative gradient
 } Vocab;
 
 
@@ -33,6 +32,7 @@ long long unigram_table_size;
 real *syn0;
 real *syn1neg;
 real *exp_table;
+real *adagrad;
 long long *out_degree;
 long long *in_degree;
 real *rank1neg;

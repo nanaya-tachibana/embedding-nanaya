@@ -41,13 +41,15 @@ int RandomPath(StaticGraph *g,
 	       uint32_t start,
 	       int max_length,
 	       float alpha,
-	       int use_meta_path);
+	       uint8_t meta_path_length,
+	       uint8_t *meta_path);
 void GenerateRandomWalkThread(void *_g, uint64_t idx, int tid);
 void GenerateRandomWalk(StaticGraph *g,
 			int path_length,
 			int num_per_vertex,
 			float alpha,
-			int use_meta_path,
+			uint8_t meta_path_length,
+			uint8_t *meta_path,
 			int n_jobs);
 void SetOutputFile(char *filename);
 uint32_t RandomInteger(uint32_t low, uint32_t high);

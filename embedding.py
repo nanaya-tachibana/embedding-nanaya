@@ -12,9 +12,14 @@ from tqdm import tqdm
 
 class Vocab:
 
-    def __init__(self):
-        self._vocab = []
-        self.word_indices = dict()
+    def __init__(self, words=None, word_freqs=None):
+        if words is None or word_freqs is None:
+            self._vocab = []
+            self.word_indices = dict()
+        else:
+            self._vocab = [{'word': str(word), 'freq': int(freq)}
+                           for word, freq in zip(words, word_freqs)]
+            self.word_indices = dict(zip(words, range(len(words))))
 
     def add_word(self, word):
         """
@@ -69,6 +74,9 @@ class Vocab:
              Return -1 if the word is not in the vocab.
         """
         return self.word_indices.get(word, -1)
+
+    def idx(self, i):
+        return self._vocab[i]['word']
 
     def filtering(self, min_count):
         """
@@ -154,9 +162,32 @@ class Word2vec:
 
     def load(self, filename):
         self.trained = True
+        model = np.load(filename)
+        self.syn0 = model['syn0']
+        self.syn1neg = model['syn1neg']
+        self.z = model['params'][0]
+        self.z = float(self.z)
+        self.unigram_table_size = int(model['params'][1])
+        self.max_unigram_table_size = int(model['params'][2])
+        self.vocab = Vocab(model['words'], model['word_freqs'])
+        unigram_table = model['unigram_table']
+        self.unigram_table = np.zeros(self.max_unigram_table_size,
+                                      dtype=object)
+        for i in tqdm(range(self.unigram_table_size)):
+            self.unigram_table[i] = self.vocab.idx(unigram_table[i])
 
     def save(self, filename):
-        pass
+        words, word_freqs = zip(*[(v['word'], v['freq']) for v in self.vocab])
+        words = np.array(words)
+        word_freqs = np.array(word_freqs, dtype=np.uint32)
+        np.savez_compressed(filename,
+                            words=words,
+                            word_freqs=word_freqs,
+                            syn0=self.syn0,
+                            syn1neg=self.syn1neg,
+                            unigram_table=self.unigram_table,
+                            params=np.array([self.z, self.unigram_table_size,
+                                             self.max_unigram_table_size]))
 
     def save_word2vec_format(self, filename):
         with open(filename, 'wb') as f:
@@ -198,7 +229,7 @@ class Word2vec:
             temp = self.syn1neg
             self.syn1neg = np.zeros(self.embedding_size * vocab_size,
                                     dtype=np.float32)
-            self.syn1neg[:self.embedding_size*temp.shape[0]] = temp.flatten()
+            self.syn1neg[:temp.shape[0]] = temp
             del temp
         else:
             self.syn1neg = np.zeros(self.embedding_size * vocab_size,
@@ -235,10 +266,12 @@ class Word2vec:
         if not unigram_online:
             self._build_unigram_table()
         else:
+            print('Rebuild unigram table')
             self.unigram_table = np.array(
-                [self.vocab.get_indice[w]
+                [self.vocab.get_indice(w)
                  for w in self.unigram_table if w in self.vocab],
                 dtype=np.int64)
+            self.unigram_table_size = self.unigram_table.shape[0]
         return word_count
 
     def _build_unigram_table(self):
@@ -283,16 +316,16 @@ class Node2vec(Word2vec):
               path_length=80,
               num_per_vertex=10,
               alpha=0,
-              use_meta_path=0,
+              meta_path=None,
               output_file=None,
-              apply_neu=True,
+              apply_neu=False,
               n_jobs=os.cpu_count()):
         builder = RandomWalkCorpus(adj_matrix, node_names, node_types)
         corpus_file = builder.build_corpus(
             path_length=path_length,
             num_per_vertex=num_per_vertex,
             alpha=alpha,
-            use_meta_path=use_meta_path,
+            meta_path=meta_path,
             output_file=output_file,
             n_jobs=n_jobs)
         print('')
@@ -349,7 +382,7 @@ class Node2vecWithRank(Node2vec):
               path_length=80,
               num_per_vertex=10,
               alpha=0,
-              use_meta_path=0,
+              meta_path=None,
               output_file=None,
               apply_neu=False,
               n_jobs=os.cpu_count()):
@@ -358,7 +391,7 @@ class Node2vecWithRank(Node2vec):
             path_length=path_length,
             num_per_vertex=num_per_vertex,
             alpha=alpha,
-            use_meta_path=use_meta_path,
+            meta_path=meta_path,
             output_file=output_file,
             n_jobs=n_jobs)
         train_words, words, word_freqs = self._setup(corpus_file)

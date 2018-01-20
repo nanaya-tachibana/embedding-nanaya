@@ -24,7 +24,8 @@ cdef extern from 'static_graph.h':
 			    int path_length,
 			    int num_per_vertex,
 			    float alpha,
-                            int use_meta_path,
+                            uint8_t meta_path_length,
+                            uint8_t *meta_path,
 			    int n_jobs) nogil
 
         

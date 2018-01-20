@@ -6,7 +6,8 @@ typedef struct {
   StaticGraph *graph;
   int length;
   float alpha;
-  int meta;
+  uint8_t *meta_path;
+  uint8_t meta_path_length;
 } global_t;
 
 
@@ -126,13 +127,13 @@ void GraphPrint(StaticGraph *g) {
 
 
 int RandomPath(StaticGraph *g, char **path, uint32_t start,
-	       int max_length, float alpha, int use_meta_path) {
+	       int max_length, float alpha, uint8_t meta_path_length, uint8_t *meta_path) {
   int length;
   uint32_t i;
   uint32_t neighbor;
   Vertex current;
-  int next_type;
-  int sign;
+  uint8_t next_type;
+  uint8_t current_type_idx;
   long bidx, eidx;
   
   if (start >= g->vcount) {
@@ -141,30 +142,30 @@ int RandomPath(StaticGraph *g, char **path, uint32_t start,
   }
 
   if (g->n_types == 1)
-    use_meta_path = 0;
+    meta_path = NULL;
   
   length = 0;
   strcpy(path[length++], g->vertices[start].name);
 
   current = g->vertices[start];
-  sign = 1;
-  if (use_meta_path && current.type == g->n_types - 1)
-    sign = -1;
+  if (meta_path != NULL)
+    for (current_type_idx = 0; current_type_idx < meta_path_length; current_type_idx++)
+      if (meta_path[current_type_idx] == current.type)
+	break;
 
   while (length < max_length) {
     if (RandomFloat(0, 1) >= alpha) {  // include alpha = 0
       if (current.degree == 0)
 	break;
       else {
-	if (use_meta_path) { // meta path
-          next_type = current.type + sign;
+	if (meta_path != NULL) { // meta path
+	  current_type_idx = (current_type_idx + 1) % meta_path_length;
+	  next_type = meta_path[current_type_idx];
 	  bidx = current.type_begin_idx[next_type];
 	  eidx = current.type_end_idx[next_type];
 	  if (eidx == bidx)
 	    break;
 	  i = RandomInteger(bidx, eidx);
-          if (next_type == 0 || next_type == g->n_types - 1)
-            sign = -sign;
 	}
 	else
 	  i = RandomInteger(0, current.degree);
@@ -214,7 +215,8 @@ void GenerateRandomWalkThread(void *_g, uint64_t idx, int tid) {
     }
   }
 
-  actual_length = RandomPath(g->graph, path, idx, g->length, g->alpha, g->meta);
+  actual_length = RandomPath(g->graph, path, idx, g->length, g->alpha,
+			     g->meta_path_length, g->meta_path);
   for (i = 0; i < actual_length; i++) {
     if (i != 0)
       fprintf(g->files[tid], " ");
@@ -229,7 +231,8 @@ void GenerateRandomWalkThread(void *_g, uint64_t idx, int tid) {
 
 
 void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
-			float alpha, int use_meta_path, int n_jobs) {
+			float alpha, uint8_t meta_path_length,
+			uint8_t *meta_path, int n_jobs) {
   global_t global;
   char temp[MAX_STRING];
   FILE **files;
@@ -238,7 +241,8 @@ void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
   global.graph = g;
   global.length = path_length;
   global.alpha = alpha;
-  global.meta = use_meta_path;
+  global.meta_path = meta_path;
+  global.meta_path_length = meta_path_length;
 
   files = (FILE **)malloc(n_jobs * sizeof(FILE *));
   if (files == NULL) {

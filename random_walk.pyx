@@ -16,7 +16,7 @@ def build_random_walk_corpus(adj_matrix,
                              list vertex_names,
                              char *output_file, int path_length,
                              int num_per_vertex, float alpha,
-                             int use_meta_path,
+                             list meta_path,
                              int n_jobs):
     cdef uint32_t n
     cdef uint32_t i
@@ -26,8 +26,7 @@ def build_random_walk_corpus(adj_matrix,
     cdef StaticGraph g
     cdef char **names
     cdef uint32_t *neighbors
-
-    cdef char **path
+    cdef uint8_t *path
     
     vcount = adj_matrix.shape[0]
     names = <char **>malloc(vcount * cython.sizeof(char_pointer))
@@ -58,9 +57,20 @@ def build_random_walk_corpus(adj_matrix,
         SetNeighbors(&g, i, neighbors, degree)
         free(neighbors)
     SetOutputFile(output_file)
+
+    if meta_path is None:
+        path = NULL
+    else:
+        n = len(meta_path)
+        path = <uint8_t *>malloc(n * cython.sizeof(uint8_t))
+        if path is NULL:
+            raise MemoryError()
+        for i in range(n):
+            path[i] = meta_path[i]
+    
     with nogil:
         GenerateRandomWalk(&g, path_length, num_per_vertex,
-                           alpha, use_meta_path, n_jobs)
+                           alpha, n, path, n_jobs)
     GraphDestroy(&g)
 
 

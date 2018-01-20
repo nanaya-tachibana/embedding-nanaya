@@ -36,7 +36,7 @@ class RandomWalkCorpus:
                      path_length=80,
                      num_per_vertex=10,
                      alpha=0,
-                     use_meta_path=0,
+                     meta_path=None,
                      output_file=None,
                      n_jobs=os.cpu_count()):
         n_types = len(np.unique(self.node_types))
@@ -52,7 +52,7 @@ class RandomWalkCorpus:
             [name.encode('UTF-8') for name in self.node_names],
             output.encode('UTF-8'),
             path_length, num_per_vertex,
-            alpha, use_meta_path, n_jobs)
+            alpha, meta_path, n_jobs)
 
         temp_files = ['_'.join([output, '%d.txt' % i]) for i in range(n_jobs)]
         if output_file is None:

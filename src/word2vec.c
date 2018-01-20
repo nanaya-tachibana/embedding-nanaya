@@ -66,7 +66,7 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
 	       real _sample, int _iter, long long *_out_degree,
 	       long long *_in_degree, real *_rank1neg, float _lambda,
 	       int _debug_mode, int _n_jobs) {
-  long long i;
+  long long i, j;
   FILE *fin;
   int return_value;
   khint_t k;
@@ -82,7 +82,6 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
     k = kh_put(VocabHash, word_hash, _words[i], &return_value);
     kh_val(word_hash, k) = i;
     vocab[i].freq = _word_freqs[i];
-    vocab[i].cumgrad = EPS;
   }
 
   cbow = _cbow;
@@ -113,6 +112,17 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
   lambda = _lambda;
   debug_mode = _debug_mode;
   linear = _linear_learning_rate_decay;
+  adagrad = NULL;
+  if (linear == 0) {
+    posix_memalign((void **)&adagrad, 128, (long long)vocab_size * layer1_size * sizeof(real));
+    if (adagrad == NULL) {
+      fprintf(stderr, "Memory allocation failed\n");
+      exit(-1);
+    }
+    for (i = 0; i < vocab_size; i++)
+      for (j = 0; j < layer1_size; j++)
+	adagrad[i * layer1_size + j] = EPS;
+  }
 
   word_count_actual = 0;
   train_words = _train_words;
@@ -137,6 +147,8 @@ void TrainModel() {
   free(pt);
   free(exp_table);
   free(vocab);
+  if (adagrad != NULL)
+    free(adagrad);
 }
 
 
@@ -240,12 +252,17 @@ void *TrainModelThread(void *id) {
 	    else g = (label - exp_table[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]);
 	    if (g != 0) {
 	      if (linear == 0) {
-		vocab[target].cumgrad += pow(g, 2);
-		g /= sqrt(vocab[target].cumgrad);
+		g *= alpha;
+		for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
+		for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * neu1[c];
+	      } else {
+		for (c = 0; c < layer1_size; c++)
+		  neu1e[c] += g * syn1neg[c + l2];
+		for (c = 0; c < layer1_size; c++)
+		  adagrad[c + l2] += pow(g * neu1[c], 2);
+		for (c = 0; c < layer1_size; c++)
+		  syn1neg[c + l2] += alpha * g * neu1[c] / sqrt(adagrad[c + l2]);
 	      }
-	      g *= alpha;
-	      for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
-	      for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * neu1[c];
 	    }
 	  }
         // hidden -> in
@@ -256,7 +273,15 @@ void *TrainModelThread(void *id) {
 	    if (c >= sentence_length) continue;
 	    last_word = sen[c];
 	    if (last_word == -1) continue;
-	    for (c = 0; c < layer1_size; c++) syn0[c + last_word * layer1_size] += neu1e[c];
+	    if (linear)
+	      for (c = 0; c < layer1_size; c++) syn0[c + last_word * layer1_size] += neu1e[c];
+	    else {
+	      for (c = 0; c < layer1_size; c++)
+		adagrad[c + last_word * layer1_size] += pow(neu1e[c], 2);
+	      for (c = 0; c < layer1_size; c++)
+		syn0[c + last_word * layer1_size] += alpha * neu1e[c] / sqrt(adagrad[c + last_word * layer1_size]);
+	    }
+
 	  }
       }
     } else {  //train skip-gram
@@ -289,17 +314,29 @@ void *TrainModelThread(void *id) {
 	      else if (f < -MAX_EXP) g = (label - 0);
 	      else g = (label - exp_table[(int)((f + MAX_EXP) * (EXP_TABLE_SIZE / MAX_EXP / 2))]);
 	      if (g != 0) {
-		if (linear == 0) {
-		  vocab[target].cumgrad += pow(g, 2);
-		  g /= sqrt(vocab[target].cumgrad);
+		if (linear) {
+		  g *= alpha;
+		  for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
+		  for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * syn0[c + l1];
+		} else {
+		  for (c = 0; c < layer1_size; c++)
+		    neu1e[c] += g * syn1neg[c + l2];
+		  for (c = 0; c < layer1_size; c++)
+		    adagrad[c + l2] += pow(g * syn0[c + l1], 2);
+		  for (c = 0; c < layer1_size; c++)
+		    syn1neg[c + l2] += alpha * g * syn0[c + l1] / adagrad[c + l2];
 		}
-		g *= alpha;
-		for (c = 0; c < layer1_size; c++) neu1e[c] += g * syn1neg[c + l2];
-		for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * syn0[c + l1];
 	      }
 	    }
 	  // Learn weights input -> hidden
-	  for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+	  if (linear)
+	    for (c = 0; c < layer1_size; c++) syn0[c + l1] += neu1e[c];
+	  else {
+	    for (c = 0; c < layer1_size; c++)
+	      adagrad[c + l1] += pow(neu1e[c], 2);
+	    for (c = 0; c < layer1_size; c++)
+	      syn0[c + l1] += alpha * neu1e[c] / sqrt(adagrad[c + l1]);
+	  }
 	}
     }
     if (lambda != 0 && rank1neg != NULL && sentence_position != 0) {

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include <errno.h>
+#include <pthread.h>
 #include "random.h"
 
 #define MAX_STRING 100
@@ -43,7 +44,7 @@ int RandomPath(StaticGraph *g,
 	       float alpha,
 	       uint8_t meta_path_length,
 	       uint8_t *meta_path);
-void GenerateRandomWalkThread(void *_g, uint64_t idx, int tid);
+void *GenerateRandomWalkThread(void *params);
 void GenerateRandomWalk(StaticGraph *g,
 			int path_length,
 			int num_per_vertex,

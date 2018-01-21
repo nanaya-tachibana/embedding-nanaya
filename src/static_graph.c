@@ -2,13 +2,15 @@
 
 
 typedef struct {
-  FILE **files;
+  int tid;
+  int num_threads;
   StaticGraph *graph;
   int length;
+  int num_per_vertex;
   float alpha;
   uint8_t *meta_path;
   uint8_t meta_path_length;
-} global_t;
+} Params;
 
 
 void GraphInit(StaticGraph *g, uint32_t vcount,
@@ -186,28 +188,29 @@ void SetOutputFile(char *filename) {
 }
 
 
-void GenerateRandomWalkThread(void *_g, uint64_t idx, int tid) {
+void *GenerateRandomWalkThread(void *params) {
   char **path;
   int actual_length;
-  int i;
+  int i, iter;
   clock_t now;
+  Params *p;
+  FILE *f;
+  uint32_t idx, start, end;
+  char temp[MAX_STRING];
 
-  global_t *g = (global_t *)_g;
-  idx = idx % g->graph->vcount;  // start point index
-
-  now = clock();
-  printf("%cProgress: %.2f%%  Words/thread/sec: %.2fk  ", 13,
-         actual_node_count / (float)(total_node_count) * 100,
-         actual_node_count / ((float)(now - start + 1) / (float)CLOCKS_PER_SEC * 1000));
-  fflush(stdout);
-  actual_node_count++;
-
-  path = (char **)malloc(g->length * sizeof(char *));
+  p = (Params *)params;
+  sprintf(temp, "%s_%d.txt", output_file, p->tid);
+  f = fopen(temp , "w");
+  if (f == NULL) {
+    fprintf(stderr, "(ERROR) Cannot open file %s: %s\n", temp, strerror(errno));
+    exit(-1);
+  }
+  path = (char **)malloc(p->length * sizeof(char *));
   if (path == NULL) {
     perror("(ERROR) Memory allocation failed\n");
     exit(-1);
   }
-  for (i = 0; i < g->length; i++) {
+  for (i = 0; i < p->length; i++) {
     path[i] = (char *)malloc(sizeof(char) * MAX_STRING);
     if (path[i] == NULL) {
       perror("(ERROR) Memory allocation failed\n");
@@ -215,58 +218,72 @@ void GenerateRandomWalkThread(void *_g, uint64_t idx, int tid) {
     }
   }
 
-  actual_length = RandomPath(g->graph, path, idx, g->length, g->alpha,
-			     g->meta_path_length, g->meta_path);
-  for (i = 0; i < actual_length; i++) {
-    if (i != 0)
-      fprintf(g->files[tid], " ");
-    fprintf(g->files[tid], "%s", path[i]);
-  }
-  fprintf(g->files[tid], "\n");
+  start = p->graph->vcount / p->num_threads * p->tid;
+  if (p->tid == p->num_threads - 1)
+    end = p->graph->vcount;
+  else
+    end = p->graph->vcount / p->num_threads * (p->tid + 1);
+  for (iter = 0; iter < p->num_per_vertex; iter++)
+    for (idx = start; idx < end; idx++) {
+      now = clock();
+      printf("%cProgress: %.2f%%  Words/thread/sec: %.2fk  ", 13,
+	     actual_node_count / (float)(total_node_count) * 100,
+	     actual_node_count / ((float)(now - start + 1) / (float)CLOCKS_PER_SEC * 1000));
+      fflush(stdout);
+      actual_node_count++;
+      actual_length = RandomPath(p->graph, path, idx, p->length, p->alpha,
+				 p->meta_path_length, p->meta_path);
+      for (i = 0; i < actual_length; i++) {
+	if (i != 0)
+	  fprintf(f, " ");
+	fprintf(f, "%s", path[i]);
+      }
+      fprintf(f, "\n");
+    }
 
-  for (i = 0; i < g->length; i++)
+  fclose(f);
+  for (i = 0; i < p->length; i++)
     free(path[i]);
   free(path);
+  pthread_exit(NULL);
 }
 
 
 void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
 			float alpha, uint8_t meta_path_length,
 			uint8_t *meta_path, int n_jobs) {
-  global_t global;
-  char temp[MAX_STRING];
-  FILE **files;
+  Params *param_list;
   int i;
+  pthread_t *pt;
 
-  global.graph = g;
-  global.length = path_length;
-  global.alpha = alpha;
-  global.meta_path = meta_path;
-  global.meta_path_length = meta_path_length;
-
-  files = (FILE **)malloc(n_jobs * sizeof(FILE *));
-  if (files == NULL) {
+  param_list = (Params *)malloc(n_jobs * sizeof(Params));
+  if (param_list == NULL) {
+    perror("(ERROR) Memory allocation failed\n");
+    exit(-1);
+  }
+  pt = (pthread_t *)malloc(n_jobs * sizeof(pthread_t));
+  if (pt == NULL) {
     perror("(ERROR) Memory allocation failed\n");
     exit(-1);
   }
 
-  for (i = 0; i < n_jobs; i++) {
-    sprintf(temp, "%s_%d.txt", output_file, i);
-    files[i] = fopen(temp , "w");
-    if (files[i] == NULL) {
-      fprintf(stderr, "(ERROR) Cannot open file %s: %s\n", temp, strerror(errno));
-      exit(-1);
-    }
-  }
-  global.files = files;
-
-  total_node_count = g->vcount * num_per_vertex;
   start = clock();
-  kt_for(n_jobs, &GenerateRandomWalkThread, &global, total_node_count);
-
+  total_node_count = g->vcount * num_per_vertex;
+  for (i = 0; i < n_jobs; i++) {
+    param_list[i].tid = i;
+    param_list[i].num_threads = n_jobs;
+    param_list[i].graph = g;
+    param_list[i].length = path_length;
+    param_list[i].num_per_vertex = num_per_vertex;
+    param_list[i].alpha = alpha;
+    param_list[i].meta_path = meta_path;
+    param_list[i].meta_path_length = meta_path_length;
+    pthread_create(&pt[i], NULL, &GenerateRandomWalkThread, (void *)&param_list[i]);
+  }
   for (i = 0; i < n_jobs; i++)
-    fclose(files[i]);
-  free(files);
+    pthread_join(pt[i], NULL);
+  free(pt);
+  free(param_list);
 }
 
 // Generate a random integer in [low, high)

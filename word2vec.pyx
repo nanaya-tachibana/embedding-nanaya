@@ -22,6 +22,7 @@ def train_w2v(list vocab,
 	      real sample,
               int iters,
               int linear_learning_rate_decay,
+              int ordered,
               int debug_mode,
               int n_jobs):
     cdef long long i
@@ -39,7 +40,7 @@ def train_w2v(list vocab,
               unigram_table_size, &syn0[0], &syn1neg[0], cbow,
               train_words, train_file,
               embedding_size, negative, window, init_learning_rate,
-              sample, iters, linear_learning_rate_decay,
+              sample, iters, linear_learning_rate_decay, ordered,
               debug_mode, n_jobs)
     free(words)
     with nogil:
@@ -47,8 +48,6 @@ def train_w2v(list vocab,
 
 
 
-@cython.boundscheck(False) # turn off bounds-checking for entire function
-@cython.wraparound(False)  # turn off negative index wrapping for entire function
 # def train_w2v_with_rank(list vocab,
 #                         np.ndarray[long long, ndim=1, mode='c'] word_freqs,
 # 	                np.ndarray[long long, ndim=1, mode='c'] unigram_table,

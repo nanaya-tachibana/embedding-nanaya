@@ -44,6 +44,7 @@ real starting_alpha;
 real sample;
 long long iter;
 real lambda;
+int ordered;
 int debug_mode;
 int linear;
 
@@ -61,7 +62,7 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
 	       long long _train_words, char *_train_file,
 	       long long _embedding_size, int _negative, int _window,
 	       real _init_learning_rate, real _sample, int _iter,
-	       int _linear_learning_rate_decay,
+	       int _linear_learning_rate_decay, int ordered,
 	       int _debug_mode, int _n_jobs);
 void TrainModel();
 void *TrainModelThread(void *id);

@@ -10,7 +10,7 @@ cdef extern from 'word2vec.h':
 	           long long _train_words, char *_train_file,
 	           long long _embedding_size, int _negative, int _window,
                    real _init_learning_rate, real _sample, int _iter,
-                   int _linear_learning_rate_decay,
+                   int _linear_learning_rate_decay, int _ordered,
                    int _debug_mode, int _n_jobs)
     void TrainModel() nogil
 

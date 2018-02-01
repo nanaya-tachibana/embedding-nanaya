@@ -66,7 +66,7 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
 	       long long _train_words, char *_train_file,
 	       long long _embedding_size, int _negative, int _window,
 	       real _init_learning_rate, real _sample, int _iter,
-	       int _linear_learning_rate_decay,
+	       int _linear_learning_rate_decay, int _ordered,
 	       int _debug_mode, int _n_jobs) {
   long long i, j;
   FILE *fin;
@@ -108,7 +108,7 @@ void InitModel(char **_words, long long *_word_freqs, long long _vocab_size,
   alpha = starting_alpha;
   sample = _sample;
   iter = _iter;
-  lambda = _lambda;
+  ordered = _ordered;
   debug_mode = _debug_mode;
   linear = _linear_learning_rate_decay;
   if (linear == 0) {
@@ -160,14 +160,12 @@ void TrainModel() {
 
 
 void *TrainModelThread(void *id) {
-  long long a, b, d, cw, word, last_word, sentence_length = 0, sentence_position = 0;
-  long long i, j;
+  long long a, b, d, w, cw, word, last_word, sentence_length = 0, sentence_position = 0;
   long long word_count = 0, last_word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
   long long l1, l2, c, pos, target, label, local_iter = iter;
   unsigned long long next_random = (long long)id;
   char eof = 0;
   real f, g;
-  real g1, g2;
   clock_t now;
   real *neu1 = (real *)calloc(layer1_size, sizeof(real));
   real *neu1e = (real *)calloc(layer1_size, sizeof(real));
@@ -247,7 +245,7 @@ void *TrainModelThread(void *id) {
 	    } else {
 	      next_random = next_random * (unsigned long long)25214903917 + 11;
 	      target = unigram_table[(next_random >> 16) % unigram_table_size];
-	      if (target == 0) target = next_random % (vocab_size - 1) + 1;
+	      // if (target == 0) target = next_random % (vocab_size - 1) + 1;
 	      if (target == word) continue;
 	      label = 0;
 	    }
@@ -291,7 +289,11 @@ void *TrainModelThread(void *id) {
 	  }
       }
     } else {  //train skip-gram
-      for (a = b; a < window * 2 + 1 - b; a++)
+      if (ordered)
+	w = window + 1;
+      else
+	w = window * 2 + 1 - b;
+      for (a = b; a < w; a++)
 	if (a != window) {
 	  pos = sentence_position - window + a;
 	  if (pos < 0) continue;
@@ -308,7 +310,8 @@ void *TrainModelThread(void *id) {
 	      } else {
 		next_random = next_random * (unsigned long long)25214903917 + 11;
 		target = unigram_table[(next_random >> 16) % unigram_table_size];
-		if (target == 0) target = next_random % (vocab_size - 1) + 1;
+		// target = (next_random >> 16) % vocab_size;
+		// if (target == 0) target = next_random % (vocab_size - 1) + 1;
 		if (target == word) continue;
 		label = 0;
 	      }

@@ -268,6 +268,7 @@ void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
   }
 
   start = clock();
+  actual_node_count = 0;
   total_node_count = g->vcount * num_per_vertex;
   for (i = 0; i < n_jobs; i++) {
     param_list[i].tid = i;

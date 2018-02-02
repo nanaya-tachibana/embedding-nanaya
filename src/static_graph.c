@@ -10,6 +10,7 @@ typedef struct {
   float alpha;
   uint8_t *meta_path;
   uint8_t meta_path_length;
+  int debug_mode;
 } Params;
 
 
@@ -218,19 +219,21 @@ void *GenerateRandomWalkThread(void *params) {
     }
   }
 
-  start = p->graph->vcount / p->num_threads * p->tid;
+  begin = p->graph->vcount / p->num_threads * p->tid;
   if (p->tid == p->num_threads - 1)
     end = p->graph->vcount;
   else
     end = p->graph->vcount / p->num_threads * (p->tid + 1);
   for (iter = 0; iter < p->num_per_vertex; iter++)
-    for (idx = start; idx < end; idx++) {
-      now = clock();
-      printf("%cProgress: %.2f%%  Words/thread/sec: %.2fk  ", 13,
-	     actual_node_count / (float)(total_node_count) * 100,
-	     actual_node_count / ((float)(now - start + 1) / (float)CLOCKS_PER_SEC * 1000));
-      fflush(stdout);
+    for (idx = begin; idx < end; idx++) {
       actual_node_count++;
+      if ((p->debug_mode > 1)) {
+	now = clock();
+	printf("%cProgress: %.2f%%  Words/thread/sec: %.2fk  ", 13,
+	       actual_node_count / (float)(total_node_count) * 100,
+	       actual_node_count / ((float)(now - start + 1) / (float)CLOCKS_PER_SEC * 1000));
+	fflush(stdout);
+      }
       actual_length = RandomPath(p->graph, path, idx, p->length, p->alpha,
 				 p->meta_path_length, p->meta_path);
       for (i = 0; i < actual_length; i++) {
@@ -251,7 +254,7 @@ void *GenerateRandomWalkThread(void *params) {
 
 void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
 			float alpha, uint8_t meta_path_length,
-			uint8_t *meta_path, int n_jobs) {
+			uint8_t *meta_path, int debug_mode, int n_jobs) {
   Params *param_list;
   int i;
   pthread_t *pt;
@@ -279,6 +282,7 @@ void GenerateRandomWalk(StaticGraph *g, int path_length, int num_per_vertex,
     param_list[i].alpha = alpha;
     param_list[i].meta_path = meta_path;
     param_list[i].meta_path_length = meta_path_length;
+    param_list[i].debug_mode = debug_mode;
     pthread_create(&pt[i], NULL, &GenerateRandomWalkThread, (void *)&param_list[i]);
   }
   for (i = 0; i < n_jobs; i++)
